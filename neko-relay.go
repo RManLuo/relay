@@ -258,6 +258,7 @@ func main() {
 			}
 		}
 		for rid, rule := range newRules {
+			fmt.Println(rule)
 			rules[rid] = rule
 			// traffic[rid] = newTf()
 			go add(rid)
