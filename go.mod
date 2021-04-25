@@ -1,4 +1,4 @@
-module relay
+module neko-relay
 
 go 1.16
 

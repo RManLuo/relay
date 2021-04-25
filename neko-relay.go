@@ -30,9 +30,10 @@ type rule struct {
 }
 
 var (
-	rules   = make(map[string]rule)
-	traffic = make(map[string]*tf)
-	tcp_lis = make(map[string]net.Listener)
+	rules      = make(map[string]rule)
+	traffic    = make(map[string]*tf)
+	tcp_lis    = make(map[string]net.Listener)
+	tcp_remote = make(map[string]net.Listener)
 
 	POOL = sync.Pool{
 		New: func() interface{} {
@@ -84,13 +85,12 @@ func add_tcp(rid string, local_addr string, remote_addr string) (err error) {
 		if !has {
 			return
 		}
-		local_tcp, err2 := lis.Accept() //接受tcp客户端连接，并返回新的套接字进行通信
-		if err != nil {
-			fmt.Println("Accept:", err2)
+		local_tcp, err1 := lis.Accept() //接受tcp客户端连接，并返回新的套接字进行通信
+		if err1 != nil {
 			return
 		}
-		remote_tcp, err := net.Dial("tcp", remote_addr) //连接目标服务器
-		if err != nil {
+		remote_tcp, err2 := net.Dial("tcp", remote_addr) //连接目标服务器
+		if err2 != nil {
 			continue
 		}
 		go fw_tcp(rid, local_tcp, remote_tcp, false)
@@ -142,15 +142,15 @@ func ddns() {
 }
 
 var (
-	key   = flag.String("key", "key", "api key")
-	port  = flag.String("port", "8080", "api port")
-	debug = flag.Bool("debug", false, "enable debug")
-	show_version   = flag.Bool("version", false, "show version")
+	key          = flag.String("key", "key", "api key")
+	port         = flag.String("port", "8080", "api port")
+	debug        = flag.Bool("debug", false, "enable debug")
+	show_version = flag.Bool("version", false, "show version")
 )
 
 func resp(c *gin.Context, success bool, data interface{}, code int) {
 	c.JSON(code, gin.H{
-		"success": false,
+		"success": success,
 		"data":    data,
 	})
 }
@@ -176,19 +176,19 @@ func ParseRule(c *gin.Context) (rid string, err error) {
 }
 func main() {
 	flag.Parse()
-	if *show_version!=false{
-		fmt.Println("neko-relay v1.0");
+	if *show_version != false {
+		fmt.Println("neko-relay v1.0")
 		return
 	}
 	if *debug != true {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.New()
+	r.Use(webMiddleware)
 	r.GET("/data", func(c *gin.Context) {
 		fmt.Println(rules, traffic, tcp_lis)
 		c.JSON(200, gin.H{"rules": rules, "tcp": tcp_lis, "traffic": traffic})
 	})
-	// r.Use(webMiddleware)
 	r.POST("/traffic", func(c *gin.Context) {
 		reset, _ := strconv.ParseBool(c.DefaultPostForm("reset", "false"))
 		y := gin.H{}
@@ -233,11 +233,12 @@ func main() {
 	r.POST("/sync", func(c *gin.Context) {
 		newRules := make(map[string]rule)
 		json.Unmarshal([]byte(c.PostForm("rules")), &newRules)
-		for rid, rule := range newRules {
-			rip,err:=getIP(rule.remote)
-			if err==nil{
-				rule[rid].RIP=rip
-				go add(rid)
+		for rid, r := range newRules {
+			rip, err := getIP(r.Remote)
+			if err == nil {
+				newRules[rid] = rule{Port: r.Port, Remote: r.Remote, RIP: rip, Rport: r.Rport, Type: r.Type}
+			} else {
+				delete(newRules, rid)
 			}
 		}
 		for rid := range rules {
