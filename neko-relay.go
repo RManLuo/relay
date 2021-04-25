@@ -246,7 +246,9 @@ func main() {
 				delete(newRules, rid)
 			}
 		}
-		fmt.Println(newRules)
+		if *debug {
+			fmt.Println(newRules)
+		}
 		for rid := range rules {
 			rule, has := newRules[rid]
 			if has && rule == rules[rid] {
@@ -258,7 +260,9 @@ func main() {
 			}
 		}
 		for rid, rule := range newRules {
-			fmt.Println(rule)
+			if *debug {
+				fmt.Println(rule)
+			}
 			rules[rid] = rule
 			// traffic[rid] = newTf()
 			go add(rid)
