@@ -262,7 +262,7 @@ func main() {
 			rules[rid] = rule
 			// traffic[rid] = newTf()
 			go add(rid)
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 		}
 		resp(c, true, rules, 200)
 	})
