@@ -246,6 +246,7 @@ func main() {
 				delete(newRules, rid)
 			}
 		}
+		fmt.Println(newRules)
 		for rid := range rules {
 			rule, has := newRules[rid]
 			if has && rule == rules[rid] {
