@@ -62,6 +62,10 @@ func fw_tcp(rid string, dst io.Writer, src io.Reader, reverse bool) {
 			fmt.Println(err)
 			// return
 		}
+		_, has := traffic[rid]
+		if !has {
+			traffic[rid] = newTf()
+		}
 		traffic[rid].rw.Lock()
 		if reverse {
 			traffic[rid].tcp_down += bytes
@@ -185,7 +189,7 @@ func main() {
 	}
 	r := gin.New()
 	r.GET("/data/"+*key, func(c *gin.Context) {
-		fmt.Println(rules, traffic, tcp_lis)
+		// fmt.Println(rules, traffic, tcp_lis)
 		c.JSON(200, gin.H{"rules": rules, "tcp": tcp_lis, "traffic": traffic})
 	})
 	r.Use(webMiddleware)
@@ -247,7 +251,7 @@ func main() {
 				delete(newRules, rid)
 			} else {
 				del(rid)
-				time.Sleep(30 * time.Millisecond)
+				time.Sleep(60 * time.Millisecond)
 				delete(rules, rid)
 			}
 		}
@@ -255,7 +259,7 @@ func main() {
 			rules[rid] = rule
 			traffic[rid] = newTf()
 			go add(rid)
-			time.Sleep(30 * time.Millisecond)
+			time.Sleep(60 * time.Millisecond)
 		}
 		resp(c, true, rules, 200)
 	})
