@@ -43,8 +43,9 @@ var (
 )
 
 func fw_tcp(rid string, dst io.Writer, src io.Reader, reverse bool) {
-	buf := POOL.Get().([]byte)
-	defer POOL.Put(buf)
+	// buf := POOL.Get().([]byte)
+	// defer POOL.Put(buf)
+	buf := make([]byte, 32*1024)
 	for {
 		if src == nil || dst == nil {
 			return
