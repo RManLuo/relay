@@ -145,6 +145,7 @@ var (
 	key   = flag.String("key", "key", "api key")
 	port  = flag.String("port", "8080", "api port")
 	debug = flag.Bool("debug", false, "enable debug")
+	show_version   = flag.Bool("version", false, "show version")
 )
 
 func resp(c *gin.Context, success bool, data interface{}, code int) {
@@ -175,6 +176,10 @@ func ParseRule(c *gin.Context) (rid string, err error) {
 }
 func main() {
 	flag.Parse()
+	if *show_version!=false{
+		fmt.Println("neko-relay v1.0");
+		return
+	}
 	if *debug != true {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -207,6 +212,7 @@ func main() {
 			return
 		}
 		go add(rid)
+		resp(c, true, nil, 200)
 	})
 	r.POST("/edit", func(c *gin.Context) {
 		rid, err := ParseRule(c)
@@ -216,15 +222,24 @@ func main() {
 		}
 		del(rid)
 		go add(rid)
+		resp(c, true, nil, 200)
 	})
 	r.POST("/del", func(c *gin.Context) {
 		rid := c.PostForm("rid")
 		del(rid)
 		delete(rules, rid)
+		resp(c, true, nil, 200)
 	})
 	r.POST("/sync", func(c *gin.Context) {
 		newRules := make(map[string]rule)
 		json.Unmarshal([]byte(c.PostForm("rules")), &newRules)
+		for rid, rule := range newRules {
+			rip,err:=getIP(rule.remote)
+			if err==nil{
+				rule[rid].RIP=rip
+				go add(rid)
+			}
+		}
 		for rid := range rules {
 			rule, has := newRules[rid]
 			if has && rule == rules[rid] {
@@ -236,9 +251,10 @@ func main() {
 		}
 		for rid, rule := range newRules {
 			rules[rid] = rule
-			traffic[rid] = &tf{tcp_up: 0, tcp_down: 0, udp_up: 0, udp_down: 0}
+			traffic[rid] = newTf()
 			go add(rid)
 		}
+		resp(c, true, nil, 200)
 	})
 	go ddns()
 	fmt.Println("Api port:", *port)
