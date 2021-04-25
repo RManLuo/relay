@@ -184,11 +184,11 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.New()
-	r.Use(webMiddleware)
-	r.GET("/data", func(c *gin.Context) {
+	r.GET("/data/"+*key, func(c *gin.Context) {
 		fmt.Println(rules, traffic, tcp_lis)
 		c.JSON(200, gin.H{"rules": rules, "tcp": tcp_lis, "traffic": traffic})
 	})
+	r.Use(webMiddleware)
 	r.POST("/traffic", func(c *gin.Context) {
 		reset, _ := strconv.ParseBool(c.DefaultPostForm("reset", "false"))
 		y := gin.H{}
@@ -255,7 +255,7 @@ func main() {
 			traffic[rid] = newTf()
 			go add(rid)
 		}
-		resp(c, true, nil, 200)
+		resp(c, true, rules, 200)
 	})
 	go ddns()
 	fmt.Println("Api port:", *port)
