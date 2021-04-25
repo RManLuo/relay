@@ -247,6 +247,7 @@ func main() {
 				delete(newRules, rid)
 			} else {
 				del(rid)
+				time.Sleep(30 * time.Millisecond)
 				delete(rules, rid)
 			}
 		}
@@ -254,6 +255,7 @@ func main() {
 			rules[rid] = rule
 			traffic[rid] = newTf()
 			go add(rid)
+			time.Sleep(30 * time.Millisecond)
 		}
 		resp(c, true, rules, 200)
 	})
