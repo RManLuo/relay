@@ -142,8 +142,9 @@ func ddns() {
 }
 
 var (
-	key  = flag.String("key", "key", "api key")
-	port = flag.String("port", ":8080", "api port")
+	key   = flag.String("key", "key", "api key")
+	port  = flag.String("port", "8080", "api port")
+	debug = flag.Bool("debug", false, "enable debug")
 )
 
 func resp(c *gin.Context, success bool, data interface{}, code int) {
@@ -174,6 +175,9 @@ func ParseRule(c *gin.Context) (rid string, err error) {
 }
 func main() {
 	flag.Parse()
+	if *debug != true {
+		gin.SetMode(gin.ReleaseMode)
+	}
 	r := gin.New()
 	r.GET("/data", func(c *gin.Context) {
 		fmt.Println(rules, traffic, tcp_lis)
@@ -237,7 +241,9 @@ func main() {
 		}
 	})
 	go ddns()
-	r.Run(*port)
+	fmt.Println("Api port:", *port)
+	fmt.Println("Api key:", *key)
+	r.Run(":" + *port)
 }
 func webMiddleware(c *gin.Context) {
 	if c.Request.Header.Get("key") != *key {
