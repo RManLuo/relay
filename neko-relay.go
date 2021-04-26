@@ -181,7 +181,7 @@ func main() {
 				delete(newRules, rid)
 			} else {
 				del(rid)
-				// time.Sleep(5 * time.Millisecond)
+				time.Sleep(5 * time.Millisecond)
 				delete(rules, rid)
 			}
 		}
@@ -192,7 +192,7 @@ func main() {
 			rules[rid] = rule
 			traffic[rid] = relay.NewTF()
 			go add(rid)
-			// time.Sleep(10 * time.Millisecond)
+			time.Sleep(20 * time.Millisecond)
 		}
 		resp(c, true, rules, 200)
 	})
