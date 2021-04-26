@@ -126,13 +126,17 @@ func main() {
 		for rid, x := range traffic {
 			x.RW.RLock()
 			y[rid] = x.TCP_UP + x.TCP_DOWN + x.UDP
-			x.RW.RUnlock()
-		}
-		if reset {
-			traffic = make(map[string]*relay.TF)
-			for rid := range rules {
-				traffic[rid] = relay.NewTF()
+			if reset {
+				_, has := rules[rid]
+				if has {
+					x.TCP_UP = 0
+					x.TCP_DOWN = 0
+					x.UDP = 0
+				} else {
+					delete(traffic, rid)
+				}
 			}
+			x.RW.RUnlock()
 		}
 		resp(c, true, y, 200)
 	})
