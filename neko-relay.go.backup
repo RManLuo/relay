@@ -4,14 +4,39 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"neko-relay/relay"
+	"io"
 	"net"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	cache "github.com/patrickmn/go-cache"
+	"github.com/txthinking/runnergroup"
 )
 
+type Relay struct {
+	TCPAddr       *net.TCPAddr
+	UDPAddr       *net.UDPAddr
+	RemoteTCPAddr *net.TCPAddr
+	RemoteUDPAddr *net.UDPAddr
+	TCPListen     *net.TCPListener
+	UDPConn       *net.UDPConn
+	UDPExchanges  *cache.Cache
+	TCPTimeout    int
+	UDPTimeout    int
+	RunnerGroup   *runnergroup.RunnerGroup
+	UDPSrc        *cache.Cache
+}
+
+type tf struct {
+	tcp_up   uint64
+	tcp_down uint64
+	udp_up   uint64
+	udp_down uint64
+	rw       *sync.RWMutex
+}
 type rule struct {
 	Port   uint   `json:port`
 	Remote string `json:remote`
@@ -21,34 +46,92 @@ type rule struct {
 }
 
 var (
-	rules   = make(map[string]rule)
-	traffic = make(map[string]*relay.TF)
-	svrs    = make(map[string]*relay.Relay)
+	rules      = make(map[string]rule)
+	traffic    = make(map[string]*tf)
+	tcp_lis    = make(map[string]net.Listener)
+	tcp_remote = make(map[string]net.Listener)
+
+	POOL = sync.Pool{
+		New: func() interface{} {
+			return make([]byte, 32*1024)
+		},
+	}
 )
 
-func add(rid string) (err error) {
+func fw_tcp(rid string, dst io.Writer, src io.Reader, reverse bool) {
+	// buf := POOL.Get().([]byte)
+	// defer POOL.Put(buf)
+	buf := make([]byte, 32*1024)
+	for {
+		if src == nil || dst == nil {
+			return
+		}
+		n, err := src.Read(buf[:])
+		if err != nil {
+			return
+		}
+		bytes := uint64(n)
+		// fmt.Println(bytes)
+		_, has := traffic[rid]
+		if !has {
+			traffic[rid] = newTf()
+		}
+		traffic[rid].rw.Lock()
+		if reverse {
+			traffic[rid].tcp_down += bytes
+		} else {
+			traffic[rid].tcp_up += bytes
+		}
+		traffic[rid].rw.Unlock()
+		if _, err := dst.Write(buf[0:n]); err != nil {
+			return
+		}
+	}
+}
+func add_tcp(rid string, local_addr string, remote_addr string) (err error) {
+	// fmt.Println(local_addr, "<=>", remote_addr)
+	tcp_lis[rid], err = net.Listen("tcp", local_addr)
+	if err != nil {
+		fmt.Println("tcp_listen:", err)
+		return
+	}
+	defer tcp_lis[rid].Close()
+	defer delete(tcp_lis, rid)
+	for {
+		lis, has := tcp_lis[rid]
+		if !has {
+			return
+		}
+		local_tcp, err1 := lis.Accept() //接受tcp客户端连接，并返回新的套接字进行通信
+		if err1 != nil {
+			return
+		}
+		remote_tcp, err2 := net.Dial("tcp", remote_addr) //连接目标服务器
+		if err2 != nil {
+			continue
+		}
+		go fw_tcp(rid, local_tcp, remote_tcp, false)
+		go fw_tcp(rid, remote_tcp, local_tcp, true)
+	}
+}
+
+func add(rid string) {
 	r := rules[rid]
 	local_addr := ":" + strconv.Itoa(int(r.Port))
 	remote_addr := r.RIP + ":" + strconv.Itoa(int(r.Rport))
-	traffic[rid] = relay.NewTF()
-	svrs[rid], err = relay.NewRelay(local_addr, remote_addr, 100, 100, traffic[rid])
-	svrs[rid].ListenAndServe()
 	// fmt.Println(local_addr, "<=>", remote_addr)
-
-	// if strings.Contains(r.Type, "tcp") {
-	// 	add_tcp(rid, local_addr, remote_addr)
-	// }
+	if strings.Contains(r.Type, "tcp") {
+		add_tcp(rid, local_addr, remote_addr)
+	}
 	// if strings.Contains(r.Type, "udp") {
 	// 	add_udp(rid, local_addr, remote_addr)
 	// }
-	return
 }
 func del(rid string) {
-	svr, has := svrs[rid]
+	lis, has := tcp_lis[rid]
 	if has {
-		svr.Shutdown()
-		time.Sleep(100 * time.Millisecond)
-		delete(svrs, rid)
+		lis.Close()
+		delete(tcp_lis, rid)
 	}
 }
 
@@ -88,6 +171,9 @@ func resp(c *gin.Context, success bool, data interface{}, code int) {
 		"data":    data,
 	})
 }
+func newTf() *tf {
+	return &tf{tcp_up: 0, tcp_down: 0, udp_up: 0, udp_down: 0, rw: new(sync.RWMutex)}
+}
 func ParseRule(c *gin.Context) (rid string, err error) {
 	rid = c.PostForm("rid")
 	port, _ := strconv.Atoi(c.PostForm("port"))
@@ -101,7 +187,7 @@ func ParseRule(c *gin.Context) (rid string, err error) {
 	rules[rid] = rule{Port: uint(port), Remote: remote, RIP: RIP, Rport: uint(rport), Type: typ}
 	_, has := traffic[rid]
 	if !has {
-		traffic[rid] = relay.NewTF()
+		traffic[rid] = newTf()
 	}
 	return
 }
@@ -117,21 +203,21 @@ func main() {
 	r := gin.New()
 	r.GET("/data/"+*key, func(c *gin.Context) {
 		// fmt.Println(rules, traffic, tcp_lis)
-		c.JSON(200, gin.H{"rules": rules, "svrs": svrs, "traffic": traffic})
+		c.JSON(200, gin.H{"rules": rules, "tcp": tcp_lis, "traffic": traffic})
 	})
 	r.Use(webMiddleware)
 	r.POST("/traffic", func(c *gin.Context) {
 		reset, _ := strconv.ParseBool(c.DefaultPostForm("reset", "false"))
 		y := gin.H{}
 		for rid, x := range traffic {
-			x.RW.RLock()
-			y[rid] = x.TCP_UP + x.TCP_DOWN + x.UDP
-			x.RW.RUnlock()
+			x.rw.RLock()
+			y[rid] = x.tcp_up + x.tcp_down + x.udp_up + x.udp_down
+			x.rw.RUnlock()
 		}
 		if reset {
-			traffic = make(map[string]*relay.TF)
+			traffic = make(map[string]*tf)
 			for rid := range rules {
-				traffic[rid] = relay.NewTF()
+				traffic[rid] = newTf()
 			}
 		}
 		resp(c, true, y, 200)
@@ -181,7 +267,7 @@ func main() {
 				delete(newRules, rid)
 			} else {
 				del(rid)
-				// time.Sleep(5 * time.Millisecond)
+				time.Sleep(5 * time.Millisecond)
 				delete(rules, rid)
 			}
 		}
@@ -190,9 +276,9 @@ func main() {
 				fmt.Println(rule)
 			}
 			rules[rid] = rule
-			traffic[rid] = relay.NewTF()
+			// traffic[rid] = newTf()
 			go add(rid)
-			// time.Sleep(10 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 		}
 		resp(c, true, rules, 200)
 	})
