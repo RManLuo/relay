@@ -9,6 +9,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/mem"
+	gnet "github.com/shirou/gopsutil/net"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -31,7 +35,7 @@ func add(rid string) (err error) {
 	local_addr := ":" + strconv.Itoa(int(r.Port))
 	remote_addr := r.RIP + ":" + strconv.Itoa(int(r.Rport))
 	traffic[rid] = relay.NewTF()
-	svrs[rid], err = relay.NewRelay(local_addr, remote_addr, 100, 100, traffic[rid])
+	svrs[rid], err = relay.NewRelay(local_addr, remote_addr, 30, 10, traffic[rid])
 	svrs[rid].ListenAndServe()
 	// fmt.Println(local_addr, "<=>", remote_addr)
 
@@ -113,13 +117,16 @@ func main() {
 	}
 	if *debug != true {
 		gin.SetMode(gin.ReleaseMode)
+
 	}
 	r := gin.New()
+	if *debug != true {
+		r.Use(webMiddleware)
+	}
 	r.GET("/data/"+*key, func(c *gin.Context) {
 		// fmt.Println(rules, traffic, tcp_lis)
 		c.JSON(200, gin.H{"rules": rules, "svrs": svrs, "traffic": traffic})
 	})
-	r.Use(webMiddleware)
 	r.POST("/traffic", func(c *gin.Context) {
 		reset, _ := strconv.ParseBool(c.DefaultPostForm("reset", "false"))
 		y := gin.H{}
@@ -201,6 +208,76 @@ func main() {
 		resp(c, true, rules, 200)
 	})
 	go ddns()
+
+	r.GET("/stat", func(c *gin.Context) {
+		CPU1, err := cpu.Times(true)
+		if err != nil {
+			resp(c, false, nil, 500)
+			return
+		}
+		NET1, err := gnet.IOCounters(true)
+		if err != nil {
+			resp(c, false, nil, 500)
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+		CPU2, err := cpu.Times(true)
+		if err != nil {
+			resp(c, false, nil, 500)
+			return
+		}
+		NET2, err := gnet.IOCounters(true)
+		if err != nil {
+			resp(c, false, nil, 500)
+			return
+		}
+		MEM, err := mem.VirtualMemory()
+		if err != nil {
+			resp(c, false, nil, 500)
+			return
+		}
+		// SWAP, _ := mem.SwapMemory()
+		// fmt.Println(CPU, MEM, SWAP, NET)
+		single := make([]float64, len(CPU1))
+		var idle, total, multi float64
+		idle, total = 0, 0
+		for i, c1 := range CPU1 {
+			c2 := CPU2[i]
+			single[i] = 1 - (c2.Idle-c1.Idle)/(c2.Total()-c1.Total())
+			idle += c2.Idle - c1.Idle
+			total += c2.Total() - c1.Total()
+		}
+		multi = 1 - idle/total
+		var in, out, in_total, out_total uint64
+		in, out, in_total, out_total = 0, 0, 0, 0
+		for i, x := range NET2 {
+			if x.Name == "lo" {
+				continue
+			}
+			in += x.BytesRecv - NET1[i].BytesRecv
+			out += x.BytesSent - NET1[i].BytesSent
+			in_total += x.BytesRecv
+			out_total += x.BytesSent
+		}
+		resp(c, true, gin.H{
+			"cpu": gin.H{"multi": multi, "single": single},
+			"net": gin.H{
+				"delta": gin.H{
+					"in":  float64(in) / 0.2,
+					"out": float64(out) / 0.2,
+				},
+				"total": gin.H{
+					"in":  in_total,
+					"out": out_total,
+				},
+			},
+			"mem": gin.H{
+				"virtual": MEM,
+				// "swap":mem.SwapMemory()
+			},
+		}, 200)
+	})
+
 	fmt.Println("Api port:", *port)
 	fmt.Println("Api key:", *key)
 	r.Run(":" + *port)

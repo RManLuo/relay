@@ -179,7 +179,7 @@ func (s *Relay) TCPHandle(c *net.TCPConn) error {
 	}
 
 	go func() {
-		var buf [1024 * 32]byte
+		var buf [1024 * 16]byte
 		for {
 			if s.TCPTimeout != 0 {
 				if err := rc.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {

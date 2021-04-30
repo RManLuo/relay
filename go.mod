@@ -11,6 +11,8 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible
+	github.com/shirou/gopsutil v3.21.3+incompatible // indirect
+	github.com/tklauser/go-sysconf v0.3.5 // indirect
 	github.com/txthinking/runnergroup v0.0.0-20210326110939-37fc67d0da7c
 	github.com/txthinking/socks5 v0.0.0-20210326104807-61b5745ff346 // indirect
 	github.com/txthinking/x v0.0.0-20210326105829-476fab902fbe // indirect
