@@ -236,8 +236,11 @@ func main() {
 			resp(c, false, nil, 500)
 			return
 		}
-		// SWAP, _ := mem.SwapMemory()
-		// fmt.Println(CPU, MEM, SWAP, NET)
+		SWAP, err := mem.SwapMemory()
+		if err != nil {
+			resp(c, false, nil, 500)
+			return
+		}
 		single := make([]float64, len(CPU1))
 		var idle, total, multi float64
 		idle, total = 0, 0
@@ -273,7 +276,7 @@ func main() {
 			},
 			"mem": gin.H{
 				"virtual": MEM,
-				// "swap":mem.SwapMemory()
+				"swap":    SWAP,
 			},
 		}, 200)
 	})
