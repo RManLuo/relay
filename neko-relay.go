@@ -118,7 +118,7 @@ func ParseRule(c *gin.Context) (rid string, err error) {
 func main() {
 	flag.Parse()
 	if *show_version != false {
-		fmt.Println("neko-relay v1.")
+		fmt.Println("neko-relay v1.1")
 		return
 	}
 	if *debug != true {
@@ -126,13 +126,13 @@ func main() {
 
 	}
 	r := gin.New()
-	if *debug != true {
-		r.Use(webMiddleware)
-	}
 	r.GET("/data/"+*key, func(c *gin.Context) {
 		// fmt.Println(rules, traffic, tcp_lis)
 		c.JSON(200, gin.H{"rules": rules, "svrs": svrs, "traffic": traffic})
 	})
+	if *debug != true {
+		r.Use(webMiddleware)
+	}
 	r.POST("/traffic", func(c *gin.Context) {
 		reset, _ := strconv.ParseBool(c.DefaultPostForm("reset", "false"))
 		y := gin.H{}
