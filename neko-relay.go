@@ -7,6 +7,7 @@ import (
 	"neko-relay/relay"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/shirou/gopsutil/cpu"
@@ -36,7 +37,12 @@ func add(rid string) (err error) {
 	remote_addr := r.RIP + ":" + strconv.Itoa(int(r.Rport))
 	traffic[rid] = relay.NewTF()
 	svrs[rid], err = relay.NewRelay(local_addr, remote_addr, 30, 10, traffic[rid])
-	svrs[rid].ListenAndServe()
+	svrs[rid].ListenAndServe(
+		strings.Contains(r.Type, "tcp"),
+		strings.Contains(r.Type, "udp"),
+		strings.Contains(r.Type, "websocket"),
+		strings.Contains(r.Type, "tls"),
+	)
 	// fmt.Println(local_addr, "<=>", remote_addr)
 
 	// if strings.Contains(r.Type, "tcp") {
@@ -130,20 +136,16 @@ func main() {
 	r.POST("/traffic", func(c *gin.Context) {
 		reset, _ := strconv.ParseBool(c.DefaultPostForm("reset", "false"))
 		y := gin.H{}
-		for rid, x := range traffic {
-			x.RW.RLock()
-			y[rid] = x.TCP_UP + x.TCP_DOWN + x.UDP
+		for rid, tf := range traffic {
+			y[rid] = tf.Total()
 			if reset {
 				_, has := rules[rid]
 				if has {
-					x.TCP_UP = 0
-					x.TCP_DOWN = 0
-					x.UDP = 0
+					tf.Reset()
 				} else {
 					delete(traffic, rid)
 				}
 			}
-			x.RW.RUnlock()
 		}
 		resp(c, true, y, 200)
 	})
