@@ -8,7 +8,6 @@ import (
 
 	cache "github.com/patrickmn/go-cache"
 	"github.com/txthinking/runnergroup"
-	"golang.org/x/net/websocket"
 )
 
 // Relay is relay server.
@@ -24,7 +23,6 @@ type Relay struct {
 	UDPTimeout    int
 	RunnerGroup   *runnergroup.RunnerGroup
 	UDPSrc        *cache.Cache
-	WSConn        *websocket.Conn
 	traffic       *TF
 }
 
@@ -98,6 +96,19 @@ func (s *Relay) ListenAndServe(tcp bool, udp bool, ws bool, tls bool) error {
 		s.RunnerGroup.Add(&runnergroup.Runner{
 			Start: func() error {
 				return s.RunWsServer()
+			},
+			Stop: func() error {
+				if s.TCPListen != nil {
+					return s.TCPListen.Close()
+				}
+				return nil
+			},
+		})
+	}
+	if tls {
+		s.RunnerGroup.Add(&runnergroup.Runner{
+			Start: func() error {
+				return s.RunTlsServer()
 			},
 			Stop: func() error {
 				if s.TCPListen != nil {
