@@ -111,7 +111,7 @@ func ParseRule(c *gin.Context) (rid string, err error) {
 	if err != nil {
 		return
 	}
-	if Port < 0 || Port > 65535 || Rport < 1 || Rport > 65535 {
+	if Port < 0 || Port > 65535 || Rport < 0 || Rport > 65535 {
 		err = errors.New("port is not in range")
 		return
 	}
@@ -185,7 +185,7 @@ func main() {
 		newRules := make(map[string]rule)
 		json.Unmarshal([]byte(c.PostForm("rules")), &newRules)
 		for rid, r := range newRules {
-			if r.Port < 1 || r.Port > 65535 || r.Rport < 1 || r.Rport > 65535 {
+			if int(r.Port) < 0 || int(r.Port) > 65535 || int(r.Rport) < 0 || int(r.Rport) > 65535 {
 				delete(newRules, rid)
 				continue
 			}
