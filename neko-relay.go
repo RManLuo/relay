@@ -205,7 +205,7 @@ func main() {
 			rules[rid] = rule
 			traffic[rid] = relay.NewTF()
 			go add(rid)
-			time.Sleep(20 * time.Millisecond)
+			time.Sleep(60 * time.Millisecond)
 		}
 		resp(c, true, rules, 200)
 	})
