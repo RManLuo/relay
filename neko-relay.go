@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"neko-relay/relay"
@@ -101,14 +102,20 @@ func resp(c *gin.Context, success bool, data interface{}, code int) {
 func ParseRule(c *gin.Context) (rid string, err error) {
 	rid = c.PostForm("rid")
 	port, _ := strconv.Atoi(c.PostForm("port"))
+	Port := uint(port)
 	remote := c.PostForm("remote")
 	rport, _ := strconv.Atoi(c.PostForm("rport"))
+	Rport := uint(rport)
 	typ := c.PostForm("type")
 	RIP, err := getIP(remote)
 	if err != nil {
 		return
 	}
-	rules[rid] = rule{Port: uint(port), Remote: remote, RIP: RIP, Rport: uint(rport), Type: typ}
+	if Port < 0 || Port > 65535 || Rport < 1 || Rport > 65535 {
+		err = errors.New("port is not in range")
+		return
+	}
+	rules[rid] = rule{Port: Port, Remote: remote, RIP: RIP, Rport: Rport, Type: typ}
 	_, has := traffic[rid]
 	if !has {
 		traffic[rid] = relay.NewTF()
@@ -178,6 +185,10 @@ func main() {
 		newRules := make(map[string]rule)
 		json.Unmarshal([]byte(c.PostForm("rules")), &newRules)
 		for rid, r := range newRules {
+			if r.Port < 1 || r.Port > 65535 || r.Rport < 1 || r.Rport > 65535 {
+				delete(newRules, rid)
+				continue
+			}
 			rip, err := getIP(r.Remote)
 			if err == nil {
 				newRules[rid] = rule{Port: r.Port, Remote: r.Remote, RIP: rip, Rport: r.Rport, Type: r.Type}
@@ -205,7 +216,7 @@ func main() {
 			rules[rid] = rule
 			traffic[rid] = relay.NewTF()
 			go add(rid)
-			time.Sleep(60 * time.Millisecond)
+			time.Sleep(30 * time.Millisecond)
 		}
 		resp(c, true, rules, 200)
 	})
