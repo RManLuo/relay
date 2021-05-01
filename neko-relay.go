@@ -118,7 +118,7 @@ func ParseRule(c *gin.Context) (rid string, err error) {
 func main() {
 	flag.Parse()
 	if *show_version != false {
-		fmt.Println("neko-relay v1.0")
+		fmt.Println("neko-relay v1.")
 		return
 	}
 	if *debug != true {
