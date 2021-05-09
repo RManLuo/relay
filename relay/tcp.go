@@ -61,10 +61,10 @@ func (s *Relay) TCPHandle(c *net.TCPConn) error {
 			if err != nil {
 				return
 			}
-			if s.traffic != nil {
-				s.traffic.RW.Lock()
-				s.traffic.TCP_UP += uint64(n)
-				s.traffic.RW.Unlock()
+			if s.Traffic != nil {
+				s.Traffic.RW.Lock()
+				s.Traffic.TCP_UP += uint64(n)
+				s.Traffic.RW.Unlock()
 			}
 			if _, err := c.Write(buf[0:n]); err != nil {
 				return
@@ -82,10 +82,10 @@ func (s *Relay) TCPHandle(c *net.TCPConn) error {
 		if err != nil {
 			return nil
 		}
-		if s.traffic != nil {
-			s.traffic.RW.Lock()
-			s.traffic.TCP_DOWN += uint64(n)
-			s.traffic.RW.Unlock()
+		if s.Traffic != nil {
+			s.Traffic.RW.Lock()
+			s.Traffic.TCP_DOWN += uint64(n)
+			s.Traffic.RW.Unlock()
 		}
 		if _, err := rc.Write(buf[0:n]); err != nil {
 			return nil

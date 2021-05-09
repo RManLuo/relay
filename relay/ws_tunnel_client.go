@@ -9,7 +9,7 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-func (s *Relay) RunWsTunneltcp2ws() error {
+func (s *Relay) RunWsTunnelClient() error {
 	var err error
 	s.TCPListen, err = net.ListenTCP("tcp", s.TCPAddr)
 	if err != nil {
@@ -33,7 +33,7 @@ func (s *Relay) RunWsTunneltcp2ws() error {
 					return
 				}
 			}
-			if err := s.WS_Tunnel_tcp2ws_Handle(c); err != nil {
+			if err := s.WsTunnelClientHandle(c); err != nil {
 				log.Println(err)
 			}
 		}(c)
@@ -41,7 +41,7 @@ func (s *Relay) RunWsTunneltcp2ws() error {
 	return nil
 }
 
-func (s *Relay) WS_Tunnel_tcp2ws_Handle(c *net.TCPConn) error {
+func (s *Relay) WsTunnelClientHandle(c *net.TCPConn) error {
 	addr := s.TCPAddr.IP.String() + ":" + strconv.Itoa(s.TCPAddr.Port)
 	ws_config, err := websocket.NewConfig("ws://"+addr+"/ws/", "http://"+addr+"/ws/")
 	if err != nil {
@@ -81,10 +81,10 @@ func (s *Relay) WS_Tunnel_tcp2ws_Handle(c *net.TCPConn) error {
 			if err != nil {
 				return
 			}
-			if s.traffic != nil {
-				s.traffic.RW.Lock()
-				s.traffic.TCP_DOWN += uint64(n)
-				s.traffic.RW.Unlock()
+			if s.Traffic != nil {
+				s.Traffic.RW.Lock()
+				s.Traffic.TCP_DOWN += uint64(n)
+				s.Traffic.RW.Unlock()
 			}
 			if _, err := rc.Write(buf[0:n]); err != nil {
 				return
@@ -103,10 +103,10 @@ func (s *Relay) WS_Tunnel_tcp2ws_Handle(c *net.TCPConn) error {
 		if err != nil {
 			return nil
 		}
-		if s.traffic != nil {
-			s.traffic.RW.Lock()
-			s.traffic.TCP_UP += uint64(n)
-			s.traffic.RW.Unlock()
+		if s.Traffic != nil {
+			s.Traffic.RW.Lock()
+			s.Traffic.TCP_UP += uint64(n)
+			s.Traffic.RW.Unlock()
 		}
 		if _, err := c.Write(buf[0:n]); err != nil {
 			return nil

@@ -94,10 +94,10 @@ func (s *Relay) UDPHandle(addr *net.UDPAddr, b []byte) error {
 			if err != nil {
 				break
 			}
-			if s.traffic != nil {
-				s.traffic.RW.Lock()
-				s.traffic.UDP += uint64(n)
-				s.traffic.RW.Unlock()
+			if s.Traffic != nil {
+				s.Traffic.RW.Lock()
+				s.Traffic.UDP += uint64(n)
+				s.Traffic.RW.Unlock()
 			}
 			if _, err := s.UDPConn.WriteToUDP(buf[0:n], ue.ClientAddr); err != nil {
 				break

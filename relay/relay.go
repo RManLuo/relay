@@ -23,16 +23,17 @@ type Relay struct {
 	UDPTimeout    int
 	RunnerGroup   *runnergroup.RunnerGroup
 	UDPSrc        *cache.Cache
-	traffic       *TF
+	Traffic       *TF
+	Protocol      string
 }
 
 // NewRelay returns a Relay.
-func NewRelay(addr, remote string, tcpTimeout, udpTimeout int, traffic *TF) (*Relay, error) {
-	taddr, err := net.ResolveTCPAddr("tcp", addr)
+func NewRelay(local, remote string, tcpTimeout, udpTimeout int, traffic *TF, protocol string) (*Relay, error) {
+	taddr, err := net.ResolveTCPAddr("tcp", local)
 	if err != nil {
 		return nil, err
 	}
-	uaddr, err := net.ResolveUDPAddr("udp", addr)
+	uaddr, err := net.ResolveUDPAddr("udp", local)
 	if err != nil {
 		return nil, err
 	}
@@ -59,14 +60,15 @@ func NewRelay(addr, remote string, tcpTimeout, udpTimeout int, traffic *TF) (*Re
 		UDPTimeout:    udpTimeout,
 		RunnerGroup:   runnergroup.New(),
 		UDPSrc:        cs2,
-		traffic:       traffic,
+		Traffic:       traffic,
+		Protocol:      protocol,
 	}
 	return s, nil
 }
 
 // Run server.
-func (s *Relay) ListenAndServe(tcp bool, udp bool, ws bool, tls bool) error {
-	if tcp {
+func (s *Relay) ListenAndServe() error {
+	if s.Protocol == "tcp" || s.Protocol == "tcp+udp" {
 		s.RunnerGroup.Add(&runnergroup.Runner{
 			Start: func() error {
 				return s.RunTCPServer()
@@ -79,7 +81,7 @@ func (s *Relay) ListenAndServe(tcp bool, udp bool, ws bool, tls bool) error {
 			},
 		})
 	}
-	if udp {
+	if s.Protocol == "udp" || s.Protocol == "tcp+udp" {
 		s.RunnerGroup.Add(&runnergroup.Runner{
 			Start: func() error {
 				return s.RunUDPServer()
@@ -92,7 +94,7 @@ func (s *Relay) ListenAndServe(tcp bool, udp bool, ws bool, tls bool) error {
 			},
 		})
 	}
-	if ws {
+	if s.Protocol == "websocket" {
 		s.RunnerGroup.Add(&runnergroup.Runner{
 			Start: func() error {
 				return s.RunWsServer()
@@ -105,7 +107,7 @@ func (s *Relay) ListenAndServe(tcp bool, udp bool, ws bool, tls bool) error {
 			},
 		})
 	}
-	if tls {
+	if s.Protocol == "tls" {
 		s.RunnerGroup.Add(&runnergroup.Runner{
 			Start: func() error {
 				return s.RunTlsServer()
@@ -118,6 +120,33 @@ func (s *Relay) ListenAndServe(tcp bool, udp bool, ws bool, tls bool) error {
 			},
 		})
 	}
+	if s.Protocol == "ws_tunnel_server" {
+		s.RunnerGroup.Add(&runnergroup.Runner{
+			Start: func() error {
+				return s.RunWsTunnelServer()
+			},
+			Stop: func() error {
+				if s.TCPListen != nil {
+					return s.TCPListen.Close()
+				}
+				return nil
+			},
+		})
+	}
+	if s.Protocol == "ws_tunnel_client" {
+		s.RunnerGroup.Add(&runnergroup.Runner{
+			Start: func() error {
+				return s.RunWsTunnelClient()
+			},
+			Stop: func() error {
+				if s.TCPListen != nil {
+					return s.TCPListen.Close()
+				}
+				return nil
+			},
+		})
+	}
+
 	return s.RunnerGroup.Wait()
 }
 

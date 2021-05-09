@@ -29,21 +29,8 @@ func add(rid string) (err error) {
 	if !has {
 		Traffic[rid] = relay.NewTF()
 	}
-	Svrs[rid], err = relay.NewRelay(local_addr, remote_addr, 30, 10, Traffic[rid])
-	tcp, udp, ws, tls := false, false, false, false
-	if r.Type == "tcp" {
-		tcp = true
-	} else if r.Type == "udp" {
-		udp = true
-	} else if r.Type == "tcp+udp" {
-		tcp, udp = true, true
-	} else if r.Type == "websocket" {
-		ws = true
-	} else if r.Type == "tls" {
-		tls = true
-	}
-
-	Svrs[rid].ListenAndServe(tcp, udp, ws, tls)
+	Svrs[rid], err = relay.NewRelay(local_addr, remote_addr, 30, 10, Traffic[rid], r.Type)
+	Svrs[rid].ListenAndServe()
 	// fmt.Println(local_addr, "<=>", remote_addr)
 
 	// if strings.Contains(r.Type, "tcp") {
