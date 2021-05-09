@@ -100,24 +100,6 @@ func main() {
 		go add(rid)
 		resp(c, true, nil, 200)
 	})
-
-	Rules["test_server"] = Rule{
-		Port:   2233,
-		Remote: "127.0.0.1",
-		RIP:    "127.0.0.1",
-		Rport:  uint(5201),
-		Type:   "ws_tunnel_server",
-	}
-	Rules["test_client"] = Rule{
-		Port:   3939,
-		Remote: "127.0.0.1",
-		RIP:    "127.0.0.1",
-		Rport:  uint(2233),
-		Type:   "ws_tunnel_client",
-	}
-	go add("test_server")
-	go add("test_client")
-
 	r.POST("/edit", func(c *gin.Context) {
 		rid, err := ParseRule(c)
 		if err != nil {
@@ -136,7 +118,7 @@ func main() {
 	})
 	r.POST("/sync", func(c *gin.Context) {
 		newRules := make(map[string]Rule)
-		json.Unmarshal([]byte(c.PostForm("Rules")), &newRules)
+		json.Unmarshal([]byte(c.PostForm("rules")), &newRules)
 		for rid, r := range newRules {
 			rip, err := getIP(r.Remote)
 			if err == nil {
