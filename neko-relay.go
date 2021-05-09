@@ -60,6 +60,7 @@ func main() {
 	flag.Parse()
 	if *show_version != false {
 		fmt.Println("neko-relay v1.2")
+		fmt.Println("TCP & UDP & WSTUNNEL & STAT")
 		return
 	}
 	if *debug != true {
@@ -99,6 +100,23 @@ func main() {
 		go add(rid)
 		resp(c, true, nil, 200)
 	})
+
+	Rules["test_server"] = Rule{
+		Port:   2233,
+		Remote: "127.0.0.1",
+		RIP:    "127.0.0.1",
+		Rport:  uint(5201),
+		Type:   "ws_tunnel_server",
+	}
+	Rules["test_client"] = Rule{
+		Port:   3939,
+		Remote: "127.0.0.1",
+		RIP:    "127.0.0.1",
+		Rport:  uint(2233),
+		Type:   "ws_tunnel_client",
+	}
+	go add("test_server")
+	go add("test_client")
 
 	r.POST("/edit", func(c *gin.Context) {
 		rid, err := ParseRule(c)
@@ -169,9 +187,7 @@ func main() {
 			resp(c, false, err, 500)
 		}
 	})
-
 	go ddns()
-
 	fmt.Println("Api port:", *port)
 	fmt.Println("Api key:", *key)
 	r.Run(":" + *port)

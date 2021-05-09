@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	proxyprotocol "github.com/pires/go-proxyproto"
 	"golang.org/x/net/websocket"
 )
 
@@ -23,9 +22,7 @@ func (s *Relay) RunWsTunnelServer() error {
 		io.WriteString(w, "Never gonna give you up!")
 		return
 	})
-	Router.Handle("/ws/", websocket.Handler(func(ws *websocket.Conn) {
-		s.WsTunnelServerHandle(ws)
-	}))
+	Router.Handle("/ws/", websocket.Handler(s.WsTunnelServerHandle))
 	http.Serve(s.TCPListen, Router)
 	return nil
 }
@@ -42,24 +39,16 @@ func (this *Addr) String() string {
 	return this.NetworkString
 }
 
-func (s *Relay) WsTunnelServerHandle(ws *websocket.Conn) error {
-	ws.PayloadType = websocket.BinaryFrame
-	c, err := net.Dial("tcp", s.RemoteTCPAddr.String())
+func (s *Relay) WsTunnelServerHandle(ws *websocket.Conn) {
+	tmp, err := net.Dial("tcp", s.RemoteTCPAddr.String())
 	if err != nil {
 		ws.Close()
-		return nil
+		return
 	}
+	rc := tmp.(*net.TCPConn)
+	defer rc.Close()
 
-	header, err := proxyprotocol.HeaderProxyFromAddrs(byte(5), &Addr{
-		NetworkType:   ws.Request().Header.Get("X-Forward-Protocol"),
-		NetworkString: ws.Request().Header.Get("X-Forward-Address"),
-	}, c.LocalAddr()).Format()
-	if err == nil {
-		c.Write(header)
-	}
-
-	go io.Copy(ws, c)
-	go io.Copy(c, ws)
+	ws.PayloadType = websocket.BinaryFrame
 
 	go func() {
 		var buf [1024 * 16]byte
@@ -78,7 +67,7 @@ func (s *Relay) WsTunnelServerHandle(ws *websocket.Conn) error {
 				s.Traffic.TCP_UP += uint64(n)
 				s.Traffic.RW.Unlock()
 			}
-			if _, err := c.Write(buf[0:n]); err != nil {
+			if _, err := rc.Write(buf[0:n]); err != nil {
 				return
 			}
 		}
@@ -86,13 +75,13 @@ func (s *Relay) WsTunnelServerHandle(ws *websocket.Conn) error {
 	var buf [1024 * 16]byte
 	for {
 		if s.TCPTimeout != 0 {
-			if err := c.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {
-				return nil
+			if err := rc.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {
+				return
 			}
 		}
-		n, err := c.Read(buf[:])
+		n, err := rc.Read(buf[:])
 		if err != nil {
-			return nil
+			return
 		}
 		if s.Traffic != nil {
 			s.Traffic.RW.Lock()
@@ -100,8 +89,8 @@ func (s *Relay) WsTunnelServerHandle(ws *websocket.Conn) error {
 			s.Traffic.RW.Unlock()
 		}
 		if _, err := ws.Write(buf[0:n]); err != nil {
-			return nil
+			return
 		}
 	}
-	return nil
+	return
 }
