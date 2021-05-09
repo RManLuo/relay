@@ -23,7 +23,6 @@ func (s *Relay) RunWsTunnelws2tcp() error {
 		io.WriteString(w, "Never gonna give you up!")
 		return
 	})
-
 	Router.Handle("/ws/", websocket.Handler(func(ws *websocket.Conn) {
 		s.WS_Tunnel_Src_Handle(ws)
 	}))
@@ -50,15 +49,17 @@ func (s *Relay) WS_Tunnel_Src_Handle(ws *websocket.Conn) error {
 		ws.Close()
 		return nil
 	}
-	go io.Copy(ws, c)
-	go io.Copy(c, ws)
-	// rc := proxy.(*net.TCPConn)
 
 	header, err := proxyprotocol.HeaderProxyFromAddrs(byte(5), &Addr{
 		NetworkType:   ws.Request().Header.Get("X-Forward-Protocol"),
 		NetworkString: ws.Request().Header.Get("X-Forward-Address"),
 	}, c.LocalAddr()).Format()
-	c.Write(header)
+	if err == nil {
+		c.Write(header)
+	}
+
+	go io.Copy(ws, c)
+	go io.Copy(c, ws)
 
 	go func() {
 		var buf [1024 * 16]byte

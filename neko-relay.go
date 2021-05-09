@@ -6,85 +6,12 @@ import (
 	"flag"
 	"fmt"
 	"neko-relay/relay"
-	"net"
+	"neko-relay/stat"
 	"strconv"
-	"strings"
 	"time"
-
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/mem"
-	gnet "github.com/shirou/gopsutil/net"
 
 	"github.com/gin-gonic/gin"
 )
-
-type rule struct {
-	Port   uint   `json:port`
-	Remote string `json:remote`
-	RIP    string
-	Rport  uint   `json:rport`
-	Type   string `json:type`
-}
-
-var (
-	rules   = make(map[string]rule)
-	traffic = make(map[string]*relay.TF)
-	svrs    = make(map[string]*relay.Relay)
-)
-
-func add(rid string) (err error) {
-	r := rules[rid]
-	local_addr := ":" + strconv.Itoa(int(r.Port))
-	remote_addr := r.RIP + ":" + strconv.Itoa(int(r.Rport))
-	traffic[rid] = relay.NewTF()
-	svrs[rid], err = relay.NewRelay(local_addr, remote_addr, 30, 10, traffic[rid])
-	svrs[rid].ListenAndServe(
-		strings.Contains(r.Type, "tcp"),
-		strings.Contains(r.Type, "udp"),
-		strings.Contains(r.Type, "websocket"),
-		strings.Contains(r.Type, "tls"),
-	)
-	// fmt.Println(local_addr, "<=>", remote_addr)
-
-	// if strings.Contains(r.Type, "tcp") {
-	// 	add_tcp(rid, local_addr, remote_addr)
-	// }
-	// if strings.Contains(r.Type, "udp") {
-	// 	add_udp(rid, local_addr, remote_addr)
-	// }
-	return
-}
-func del(rid string) {
-	svr, has := svrs[rid]
-	if has {
-		svr.Shutdown()
-		time.Sleep(100 * time.Millisecond)
-		delete(svrs, rid)
-	}
-}
-
-func getIP(host string) (ip string, err error) {
-	ips, err := net.LookupHost(host)
-	if err != nil {
-		return
-	}
-	ip = ips[0]
-	return
-}
-
-func ddns() {
-	for {
-		time.Sleep(time.Second * 60)
-		for rid, rule := range rules {
-			RIP, err := getIP(rule.Remote)
-			if err == nil && RIP != rule.RIP {
-				rule.RIP = RIP
-				del(rid)
-				go add(rid)
-			}
-		}
-	}
-}
 
 var (
 	key          = flag.String("key", "key", "api key")
@@ -99,6 +26,12 @@ func resp(c *gin.Context, success bool, data interface{}, code int) {
 		"data":    data,
 	})
 }
+func check(r Rule) (bool, error) {
+	if r.Port > 65535 || r.Rport > 65535 {
+		return false, errors.New("port is not in range")
+	}
+	return true, nil
+}
 func ParseRule(c *gin.Context) (rid string, err error) {
 	rid = c.PostForm("rid")
 	port, _ := strconv.Atoi(c.PostForm("port"))
@@ -111,21 +44,22 @@ func ParseRule(c *gin.Context) (rid string, err error) {
 	if err != nil {
 		return
 	}
-	if Port < 0 || Port > 65535 || Rport < 0 || Rport > 65535 {
-		err = errors.New("port is not in range")
+	var r = Rule{Port: Port, Remote: remote, RIP: RIP, Rport: Rport, Type: typ}
+	passed, err := check(r)
+	if !passed {
 		return
 	}
-	rules[rid] = rule{Port: Port, Remote: remote, RIP: RIP, Rport: Rport, Type: typ}
-	_, has := traffic[rid]
+	Rules[rid] = r
+	_, has := Traffic[rid]
 	if !has {
-		traffic[rid] = relay.NewTF()
+		Traffic[rid] = relay.NewTF()
 	}
 	return
 }
 func main() {
 	flag.Parse()
 	if *show_version != false {
-		fmt.Println("neko-relay v1.1")
+		fmt.Println("neko-relay v1.2")
 		return
 	}
 	if *debug != true {
@@ -134,23 +68,23 @@ func main() {
 	}
 	r := gin.New()
 	r.GET("/data/"+*key, func(c *gin.Context) {
-		// fmt.Println(rules, traffic, tcp_lis)
-		c.JSON(200, gin.H{"rules": rules, "svrs": svrs, "traffic": traffic})
+		// fmt.Println(Rules, Traffic, tcp_lis)
+		c.JSON(200, gin.H{"Rules": Rules, "Svrs": Svrs, "Traffic": Traffic})
 	})
 	if *debug != true {
 		r.Use(webMiddleware)
 	}
-	r.POST("/traffic", func(c *gin.Context) {
+	r.POST("/Traffic", func(c *gin.Context) {
 		reset, _ := strconv.ParseBool(c.DefaultPostForm("reset", "false"))
 		y := gin.H{}
-		for rid, tf := range traffic {
+		for rid, tf := range Traffic {
 			y[rid] = tf.Total()
 			if reset {
-				_, has := rules[rid]
+				_, has := Rules[rid]
 				if has {
 					tf.Reset()
 				} else {
-					delete(traffic, rid)
+					delete(Traffic, rid)
 				}
 			}
 		}
@@ -165,6 +99,7 @@ func main() {
 		go add(rid)
 		resp(c, true, nil, 200)
 	})
+
 	r.POST("/edit", func(c *gin.Context) {
 		rid, err := ParseRule(c)
 		if err != nil {
@@ -178,20 +113,22 @@ func main() {
 	r.POST("/del", func(c *gin.Context) {
 		rid := c.PostForm("rid")
 		del(rid)
-		delete(rules, rid)
+		delete(Rules, rid)
 		resp(c, true, nil, 200)
 	})
 	r.POST("/sync", func(c *gin.Context) {
-		newRules := make(map[string]rule)
-		json.Unmarshal([]byte(c.PostForm("rules")), &newRules)
+		newRules := make(map[string]Rule)
+		json.Unmarshal([]byte(c.PostForm("Rules")), &newRules)
 		for rid, r := range newRules {
-			if int(r.Port) < 0 || int(r.Port) > 65535 || int(r.Rport) < 0 || int(r.Rport) > 65535 {
-				delete(newRules, rid)
-				continue
-			}
 			rip, err := getIP(r.Remote)
 			if err == nil {
-				newRules[rid] = rule{Port: r.Port, Remote: r.Remote, RIP: rip, Rport: r.Rport, Type: r.Type}
+				nr := Rule{Port: r.Port, Remote: r.Remote, RIP: rip, Rport: r.Rport, Type: r.Type}
+				pass, _ := check(nr)
+				if pass {
+					newRules[rid] = nr
+				} else {
+					delete(newRules, rid)
+				}
 			} else {
 				delete(newRules, rid)
 			}
@@ -199,100 +136,41 @@ func main() {
 		if *debug {
 			fmt.Println(newRules)
 		}
-		for rid := range rules {
+		for rid := range Rules {
 			rule, has := newRules[rid]
-			if has && rule == rules[rid] {
+			if has && rule == Rules[rid] {
 				delete(newRules, rid)
 			} else {
 				del(rid)
-				time.Sleep(5 * time.Millisecond)
-				delete(rules, rid)
+				time.Sleep(1 * time.Millisecond)
+				delete(Rules, rid)
 			}
 		}
 		for rid, rule := range newRules {
 			if *debug {
 				fmt.Println(rule)
 			}
-			rules[rid] = rule
-			traffic[rid] = relay.NewTF()
+			Rules[rid] = rule
+			_, has := Traffic[rid]
+			if !has {
+				Traffic[rid] = relay.NewTF()
+			}
 			go add(rid)
-			time.Sleep(30 * time.Millisecond)
+			time.Sleep(5 * time.Millisecond)
 		}
-		resp(c, true, rules, 200)
+		resp(c, true, Rules, 200)
 	})
-	go ddns()
 
 	r.GET("/stat", func(c *gin.Context) {
-		CPU1, err := cpu.Times(true)
-		if err != nil {
-			resp(c, false, nil, 500)
-			return
+		res, err := stat.GetStat()
+		if err == nil {
+			resp(c, true, res, 200)
+		} else {
+			resp(c, false, err, 500)
 		}
-		NET1, err := gnet.IOCounters(true)
-		if err != nil {
-			resp(c, false, nil, 500)
-			return
-		}
-		time.Sleep(200 * time.Millisecond)
-		CPU2, err := cpu.Times(true)
-		if err != nil {
-			resp(c, false, nil, 500)
-			return
-		}
-		NET2, err := gnet.IOCounters(true)
-		if err != nil {
-			resp(c, false, nil, 500)
-			return
-		}
-		MEM, err := mem.VirtualMemory()
-		if err != nil {
-			resp(c, false, nil, 500)
-			return
-		}
-		SWAP, err := mem.SwapMemory()
-		if err != nil {
-			resp(c, false, nil, 500)
-			return
-		}
-		single := make([]float64, len(CPU1))
-		var idle, total, multi float64
-		idle, total = 0, 0
-		for i, c1 := range CPU1 {
-			c2 := CPU2[i]
-			single[i] = 1 - (c2.Idle-c1.Idle)/(c2.Total()-c1.Total())
-			idle += c2.Idle - c1.Idle
-			total += c2.Total() - c1.Total()
-		}
-		multi = 1 - idle/total
-		var in, out, in_total, out_total uint64
-		in, out, in_total, out_total = 0, 0, 0, 0
-		for i, x := range NET2 {
-			if x.Name == "lo" {
-				continue
-			}
-			in += x.BytesRecv - NET1[i].BytesRecv
-			out += x.BytesSent - NET1[i].BytesSent
-			in_total += x.BytesRecv
-			out_total += x.BytesSent
-		}
-		resp(c, true, gin.H{
-			"cpu": gin.H{"multi": multi, "single": single},
-			"net": gin.H{
-				"delta": gin.H{
-					"in":  float64(in) / 0.2,
-					"out": float64(out) / 0.2,
-				},
-				"total": gin.H{
-					"in":  in_total,
-					"out": out_total,
-				},
-			},
-			"mem": gin.H{
-				"virtual": MEM,
-				"swap":    SWAP,
-			},
-		}, 200)
 	})
+
+	go ddns()
 
 	fmt.Println("Api port:", *port)
 	fmt.Println("Api key:", *key)
