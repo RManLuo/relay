@@ -75,7 +75,7 @@ func main() {
 	if *debug != true {
 		r.Use(webMiddleware)
 	}
-	r.POST("/Traffic", func(c *gin.Context) {
+	r.POST("/traffic", func(c *gin.Context) {
 		reset, _ := strconv.ParseBool(c.DefaultPostForm("reset", "false"))
 		y := gin.H{}
 		for rid, tf := range Traffic {
