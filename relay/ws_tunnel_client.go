@@ -41,7 +41,6 @@ func (s *Relay) WsTunnelClientHandle(c *net.TCPConn) error {
 	addr := s.RemoteTCPAddr.IP.String() + ":" + strconv.Itoa(s.RemoteTCPAddr.Port)
 	ws_config, err := websocket.NewConfig("ws://"+addr+"/ws/", "http://"+addr+"/ws/")
 	if err != nil {
-		c.Close()
 		return err
 	}
 	ws_config.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4240.198 Safari/537.36")
@@ -50,18 +49,17 @@ func (s *Relay) WsTunnelClientHandle(c *net.TCPConn) error {
 	ws_config.Header.Set("X-Forward-Address", c.RemoteAddr().String())
 
 	rc, err := websocket.DialConfig(ws_config)
-	defer rc.Close()
 	if err != nil {
-		c.Close()
 		return err
 	}
+	defer rc.Close()
 	rc.PayloadType = websocket.BinaryFrame
 
-	if s.TCPTimeout != 0 {
-		if err := rc.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {
-			return err
-		}
-	}
+	// if s.TCPTimeout != 0 {
+	// 	if err := rc.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {
+	// 		return err
+	// 	}
+	// }
 
 	go func() {
 		var buf [1024 * 16]byte
@@ -88,11 +86,11 @@ func (s *Relay) WsTunnelClientHandle(c *net.TCPConn) error {
 	}()
 	var buf [1024 * 16]byte
 	for {
-		if s.TCPTimeout != 0 {
-			if err := rc.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {
-				return nil
-			}
-		}
+		// if s.TCPTimeout != 0 {
+		// 	if err := rc.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {
+		// 		return nil
+		// 	}
+		// }
 		n, err := rc.Read(buf[:])
 		if err != nil {
 			return nil

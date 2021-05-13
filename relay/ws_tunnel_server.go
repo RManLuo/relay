@@ -53,11 +53,11 @@ func (s *Relay) WsTunnelServerHandle(ws *websocket.Conn) {
 	go func() {
 		var buf [1024 * 16]byte
 		for {
-			if s.TCPTimeout != 0 {
-				if err := ws.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {
-					return
-				}
-			}
+			// if s.TCPTimeout != 0 {
+			// 	if err := ws.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {
+			// 		return
+			// 	}
+			// }
 			n, err := ws.Read(buf[:])
 			if err != nil {
 				return
