@@ -45,7 +45,7 @@ func del(rid string) {
 	Svr, has := Svrs[rid]
 	if has {
 		Svr.Shutdown()
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		delete(Svrs, rid)
 	}
 }

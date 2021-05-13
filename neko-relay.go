@@ -169,6 +169,35 @@ func main() {
 			resp(c, false, err, 500)
 		}
 	})
+
+	Rules["test_iperf3"] = Rule{
+		Port:   5202,
+		Remote: "127.0.0.1",
+		RIP:    "127.0.0.1",
+		Rport:  uint(5201),
+		Type:   "tcp+udp",
+	}
+	go add("test_iperf3")
+	time.Sleep(10 * time.Millisecond)
+	Rules["test_server"] = Rule{
+		Port:   2233,
+		Remote: "127.0.0.1",
+		RIP:    "127.0.0.1",
+		Rport:  uint(5201),
+		Type:   "ws_tunnel_server",
+	}
+	go add("test_server")
+	time.Sleep(10 * time.Millisecond)
+	Rules["test_client"] = Rule{
+		Port:   3939,
+		Remote: "127.0.0.1",
+		RIP:    "127.0.0.1",
+		Rport:  uint(2233),
+		Type:   "ws_tunnel_client",
+	}
+	go add("test_client")
+	time.Sleep(10 * time.Millisecond)
+
 	go ddns()
 	fmt.Println("Api port:", *port)
 	fmt.Println("Api key:", *key)

@@ -37,59 +37,14 @@ func (s *Relay) RunTCPServer() error {
 
 // TCPHandle handles request.
 func (s *Relay) TCPHandle(c *net.TCPConn) error {
-	tmp, err := net.Dial("tcp", s.RemoteTCPAddr.String())
+	tmp, err := net.DialTimeout("tcp", s.Remote, time.Duration(s.TCPTimeout)*time.Second)
 	if err != nil {
 		return err
 	}
 	rc := tmp.(*net.TCPConn)
 	defer rc.Close()
-	if s.TCPTimeout != 0 {
-		if err := rc.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {
-			return err
-		}
-	}
+	go Copy(c, rc, s.Traffic)
+	Copy(rc, c, s.Traffic)
 
-	go func() {
-		var buf [1024 * 16]byte
-		for {
-			if s.TCPTimeout != 0 {
-				if err := rc.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {
-					return
-				}
-			}
-			n, err := rc.Read(buf[:])
-			if err != nil {
-				return
-			}
-			if s.Traffic != nil {
-				s.Traffic.RW.Lock()
-				s.Traffic.TCP_UP += uint64(n)
-				s.Traffic.RW.Unlock()
-			}
-			if _, err := c.Write(buf[0:n]); err != nil {
-				return
-			}
-		}
-	}()
-	var buf [1024 * 16]byte
-	for {
-		if s.TCPTimeout != 0 {
-			if err := c.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {
-				return nil
-			}
-		}
-		n, err := c.Read(buf[:])
-		if err != nil {
-			return nil
-		}
-		if s.Traffic != nil {
-			s.Traffic.RW.Lock()
-			s.Traffic.TCP_DOWN += uint64(n)
-			s.Traffic.RW.Unlock()
-		}
-		if _, err := rc.Write(buf[0:n]); err != nil {
-			return nil
-		}
-	}
 	return nil
 }

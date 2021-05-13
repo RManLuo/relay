@@ -9,7 +9,7 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-func (s *Relay) RunWsTunnelServer() error {
+func (s *Relay) RunWsTunnelServer(tcp, udp bool) error {
 	var err error
 	s.TCPListen, err = net.ListenTCP("tcp", s.TCPAddr)
 	if err != nil {
@@ -22,7 +22,12 @@ func (s *Relay) RunWsTunnelServer() error {
 		io.WriteString(w, "Never gonna give you up!")
 		return
 	})
-	Router.Handle("/ws/", websocket.Handler(s.WsTunnelServerHandle))
+	if tcp {
+		Router.Handle("/wstcp/", websocket.Handler(s.WsTunnelServerTcpHandle))
+	}
+	if udp {
+		Router.Handle("/wsudp/", websocket.Handler(s.WsTunnelServerUdpHandle))
+	}
 	http.Serve(s.TCPListen, Router)
 	return nil
 }
@@ -39,58 +44,32 @@ func (this *Addr) String() string {
 	return this.NetworkString
 }
 
-func (s *Relay) WsTunnelServerHandle(ws *websocket.Conn) {
-	tmp, err := net.Dial("tcp", s.RemoteTCPAddr.String())
+func (s *Relay) WsTunnelServerTcpHandle(ws *websocket.Conn) {
+	ws.PayloadType = websocket.BinaryFrame
+	defer ws.Close()
+
+	tmp, err := net.DialTimeout("tcp", s.Remote, time.Duration(s.TCPTimeout)*time.Second)
 	if err != nil {
-		ws.Close()
 		return
 	}
 	rc := tmp.(*net.TCPConn)
 	defer rc.Close()
+	go Copy(rc, ws, s.Traffic)
+	Copy(ws, rc, s.Traffic)
+	return
+}
 
+func (s *Relay) WsTunnelServerUdpHandle(ws *websocket.Conn) {
 	ws.PayloadType = websocket.BinaryFrame
+	defer ws.Close()
 
-	go func() {
-		var buf [1024 * 16]byte
-		for {
-			// if s.TCPTimeout != 0 {
-			// 	if err := ws.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {
-			// 		return
-			// 	}
-			// }
-			n, err := ws.Read(buf[:])
-			if err != nil {
-				return
-			}
-			if s.Traffic != nil {
-				s.Traffic.RW.Lock()
-				s.Traffic.TCP_UP += uint64(n)
-				s.Traffic.RW.Unlock()
-			}
-			if _, err := rc.Write(buf[0:n]); err != nil {
-				return
-			}
-		}
-	}()
-	var buf [1024 * 16]byte
-	for {
-		if s.TCPTimeout != 0 {
-			if err := rc.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {
-				return
-			}
-		}
-		n, err := rc.Read(buf[:])
-		if err != nil {
-			return
-		}
-		if s.Traffic != nil {
-			s.Traffic.RW.Lock()
-			s.Traffic.TCP_DOWN += uint64(n)
-			s.Traffic.RW.Unlock()
-		}
-		if _, err := ws.Write(buf[0:n]); err != nil {
-			return
-		}
+	rc, err := net.DialTimeout("udp", s.Remote, time.Duration(s.UDPTimeout)*time.Second)
+	if err != nil {
+		return
 	}
+	defer rc.Close()
+
+	go Copy(rc, ws, s.Traffic)
+	Copy(ws, rc, s.Traffic)
 	return
 }

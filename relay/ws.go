@@ -3,7 +3,6 @@ package relay
 import (
 	"fmt"
 	"net"
-	"strconv"
 	"time"
 
 	"golang.org/x/net/websocket"
@@ -21,8 +20,7 @@ func (s *Relay) RunWsServer() error {
 }
 
 func (s *Relay) WS_Handle(ws *websocket.Conn) error {
-	addr := s.RemoteTCPAddr.IP.String() + ":" + strconv.Itoa(s.RemoteTCPAddr.Port)
-	ws_config, err := websocket.NewConfig("ws://"+addr+"/host-hkt.nkeo.top", "http://"+addr+"/host-hkt.nkeo.top")
+	ws_config, err := websocket.NewConfig("ws://"+s.Remote+"/host-hkt.nkeo.top", "http://"+s.Remote+"/host-hkt.nkeo.top")
 	fmt.Println(ws, ws_config)
 	if err != nil {
 		return err
@@ -60,7 +58,7 @@ func (s *Relay) WS_Handle(ws *websocket.Conn) error {
 			}
 			if s.Traffic != nil {
 				s.Traffic.RW.Lock()
-				s.Traffic.TCP_DOWN += uint64(n)
+				s.Traffic.Counter += uint64(n)
 				s.Traffic.RW.Unlock()
 			}
 			if _, err := rc.Write(buf[0:n]); err != nil {
@@ -82,7 +80,7 @@ func (s *Relay) WS_Handle(ws *websocket.Conn) error {
 		}
 		if s.Traffic != nil {
 			s.Traffic.RW.Lock()
-			s.Traffic.TCP_UP += uint64(n)
+			s.Traffic.Counter += uint64(n)
 			s.Traffic.RW.Unlock()
 		}
 		if _, err := ws.Write(buf[0:n]); err != nil {

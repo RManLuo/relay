@@ -3,13 +3,12 @@ package relay
 import (
 	"log"
 	"net"
-	"strconv"
 	"time"
 
 	"golang.org/x/net/websocket"
 )
 
-func (s *Relay) RunWsTunnelClient() error {
+func (s *Relay) RunWsTunnelTcpClient() error {
 	var err error
 	s.TCPListen, err = net.ListenTCP("tcp", s.TCPAddr)
 	if err != nil {
@@ -29,7 +28,7 @@ func (s *Relay) RunWsTunnelClient() error {
 					return
 				}
 			}
-			if err := s.WsTunnelClientHandle(c); err != nil {
+			if err := s.WsTunnelClientTcpHandle(c); err != nil {
 				log.Println(err)
 			}
 		}(c)
@@ -37,14 +36,14 @@ func (s *Relay) RunWsTunnelClient() error {
 	return nil
 }
 
-func (s *Relay) WsTunnelClientHandle(c *net.TCPConn) error {
-	addr := s.RemoteTCPAddr.IP.String() + ":" + strconv.Itoa(s.RemoteTCPAddr.Port)
-	ws_config, err := websocket.NewConfig("ws://"+addr+"/ws/", "http://"+addr+"/ws/")
+func (s *Relay) WsTunnelClientTcpHandle(c *net.TCPConn) error {
+	ws_config, err := websocket.NewConfig("ws://"+s.Remote+"/wstcp/", "http://"+s.Remote+"/wstcp/")
 	if err != nil {
 		return err
 	}
 	ws_config.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4240.198 Safari/537.36")
-	ws_config.Header.Set("X-Forward-For", s.RemoteTCPAddr.IP.String())
+	// ws_config.Header.Set("X-Forward-For", s.RemoteTCPAddr.IP.String())
+	ws_config.Header.Set("X-Forward-Host", "www.upyun.com")
 	ws_config.Header.Set("X-Forward-Protocol", c.RemoteAddr().Network())
 	ws_config.Header.Set("X-Forward-Address", c.RemoteAddr().String())
 
@@ -52,57 +51,69 @@ func (s *Relay) WsTunnelClientHandle(c *net.TCPConn) error {
 	if err != nil {
 		return err
 	}
-	defer rc.Close()
 	rc.PayloadType = websocket.BinaryFrame
+	defer rc.Close()
 
-	// if s.TCPTimeout != 0 {
-	// 	if err := rc.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {
-	// 		return err
-	// 	}
-	// }
+	go Copy(rc, c, s.Traffic)
+	Copy(c, rc, s.Traffic)
+	return nil
+}
 
-	go func() {
-		var buf [1024 * 16]byte
-		for {
-			if s.TCPTimeout != 0 {
-				if err := c.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {
+func (s *Relay) RunWsTunnelUdpClient() error {
+	var err error
+	s.UDPConn, err = net.ListenUDP("udp", s.UDPAddr)
+	if err != nil {
+		return err
+	}
+	defer s.UDPConn.Close()
+	table := make(map[string]*UDPDistribute)
+	buf := make([]byte, 1024*16)
+	for {
+		n, addr, err := s.UDPConn.ReadFrom(buf)
+		if err != nil {
+			if err, ok := err.(net.Error); ok && err.Temporary() {
+				continue
+			}
+			break
+		}
+		go func() {
+			buf = buf[:n]
+			if d, ok := table[addr.String()]; ok {
+				if d.Connected {
+					d.Cache <- buf
 					return
+				} else {
+					delete(table, addr.String())
 				}
 			}
-			n, err := c.Read(buf[:])
-			if err != nil {
-				return
-			}
-			if s.Traffic != nil {
-				s.Traffic.RW.Lock()
-				s.Traffic.TCP_DOWN += uint64(n)
-				s.Traffic.RW.Unlock()
-			}
-			if _, err := rc.Write(buf[0:n]); err != nil {
-				return
-			}
-		}
-
-	}()
-	var buf [1024 * 16]byte
-	for {
-		// if s.TCPTimeout != 0 {
-		// 	if err := rc.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {
-		// 		return nil
-		// 	}
-		// }
-		n, err := rc.Read(buf[:])
-		if err != nil {
-			return nil
-		}
-		if s.Traffic != nil {
-			s.Traffic.RW.Lock()
-			s.Traffic.TCP_UP += uint64(n)
-			s.Traffic.RW.Unlock()
-		}
-		if _, err := c.Write(buf[0:n]); err != nil {
-			return nil
-		}
+			c := NewUDPDistribute(s.UDPConn, addr)
+			table[addr.String()] = c
+			c.Cache <- buf
+			s.WsTunnelClientUdpHandle(c)
+		}()
 	}
+	return nil
+}
+
+func (s *Relay) WsTunnelClientUdpHandle(c net.Conn) error {
+	ws_config, err := websocket.NewConfig("ws://"+s.Remote+"/wsudp/", "http://"+s.Remote+"/wsudp/")
+	if err != nil {
+		return err
+	}
+	ws_config.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4240.198 Safari/537.36")
+	// ws_config.Header.Set("X-Forward-For", s.RemoteTCPAddr.IP.String())
+	ws_config.Header.Set("X-Forward-Host", "www.upyun.com")
+	ws_config.Header.Set("X-Forward-Protocol", c.RemoteAddr().Network())
+	ws_config.Header.Set("X-Forward-Address", c.RemoteAddr().String())
+
+	rc, err := websocket.DialConfig(ws_config)
+	if err != nil {
+		return err
+	}
+	rc.PayloadType = websocket.BinaryFrame
+	defer rc.Close()
+
+	go Copy(c, rc, s.Traffic)
+	Copy(rc, c, s.Traffic)
 	return nil
 }
