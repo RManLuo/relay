@@ -20,13 +20,14 @@ type Relay struct {
 	UDPTimeout  int
 	Local       string
 	Remote      string
+	RIP         string
 	Traffic     *TF
 	Protocol    string
 	RunnerGroup *runnergroup.RunnerGroup
 }
 
 // NewRelay returns a Relay.
-func NewRelay(local, remote string, tcpTimeout, udpTimeout int, traffic *TF, protocol string) (*Relay, error) {
+func NewRelay(local, remote, rip string, tcpTimeout, udpTimeout int, traffic *TF, protocol string) (*Relay, error) {
 	taddr, err := net.ResolveTCPAddr("tcp", local)
 	if err != nil {
 		return nil, err
@@ -45,6 +46,7 @@ func NewRelay(local, remote string, tcpTimeout, udpTimeout int, traffic *TF, pro
 		UDPTimeout:  udpTimeout,
 		Local:       local,
 		Remote:      remote,
+		RIP:         rip,
 		Traffic:     traffic,
 		Protocol:    protocol,
 		RunnerGroup: runnergroup.New(),
@@ -109,6 +111,29 @@ func (s *Relay) ListenAndServe() error {
 		})
 		s.RunnerGroup.Add(&runnergroup.Runner{
 			Start: s.RunWsTunnelUdpClient,
+			Stop:  s.closeUDP,
+		})
+	}
+
+	if s.Protocol == "wss_tunnel_server" {
+		s.RunnerGroup.Add(&runnergroup.Runner{
+			Start: func() error {
+				return s.RunWssTunnelServer(true, true)
+			},
+			Stop: func() error {
+				s.closeTCP()
+				s.closeUDP()
+				return nil
+			},
+		})
+	}
+	if s.Protocol == "wss_tunnel_client" {
+		s.RunnerGroup.Add(&runnergroup.Runner{
+			Start: s.RunWssTunnelTcpClient,
+			Stop:  s.closeTCP,
+		})
+		s.RunnerGroup.Add(&runnergroup.Runner{
+			Start: s.RunWssTunnelUdpClient,
 			Stop:  s.closeUDP,
 		})
 	}

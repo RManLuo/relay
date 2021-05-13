@@ -1,1 +1,3 @@
 neko-relay
+*.key
+*.pem

@@ -29,7 +29,7 @@ func add(rid string) (err error) {
 	if !has {
 		Traffic[rid] = relay.NewTF()
 	}
-	Svrs[rid], err = relay.NewRelay(local_addr, remote_addr, 30, 10, Traffic[rid], r.Type)
+	Svrs[rid], err = relay.NewRelay(local_addr, remote_addr, r.RIP, 30, 10, Traffic[rid], r.Type)
 	Svrs[rid].ListenAndServe()
 	// fmt.Println(local_addr, "<=>", remote_addr)
 

@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -15,6 +16,25 @@ import (
 	"strings"
 	"time"
 )
+
+var (
+	certFile = "public.pem"
+	keyFile  = "private.key"
+)
+
+func GetCert() {
+	_, err := os.Stat(certFile)
+	if err != nil {
+		fmt.Println(certFile, "Not exit, generating ...")
+		CreateTLSFile(certFile, keyFile)
+	}
+
+	_, err = os.Stat(keyFile)
+	if err != nil {
+		fmt.Println(keyFile, "Not exit, generating ...")
+		CreateTLSFile(certFile, keyFile)
+	}
+}
 
 func (s *Relay) RunTlsServer() error {
 	return nil

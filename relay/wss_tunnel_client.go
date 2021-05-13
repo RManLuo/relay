@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"crypto/tls"
 	"log"
 	"net"
 	"time"
@@ -8,7 +9,7 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-func (s *Relay) RunWsTunnelTcpClient() error {
+func (s *Relay) RunWssTunnelTcpClient() error {
 	var err error
 	s.TCPListen, err = net.ListenTCP("tcp", s.TCPAddr)
 	if err != nil {
@@ -28,7 +29,7 @@ func (s *Relay) RunWsTunnelTcpClient() error {
 					return
 				}
 			}
-			if err := s.WsTunnelClientTcpHandle(c); err != nil {
+			if err := s.WssTunnelClientTcpHandle(c); err != nil {
 				log.Println(err)
 			}
 		}(c)
@@ -36,11 +37,12 @@ func (s *Relay) RunWsTunnelTcpClient() error {
 	return nil
 }
 
-func (s *Relay) WsTunnelClientTcpHandle(c *net.TCPConn) error {
-	ws_config, err := websocket.NewConfig("ws://"+s.Remote+"/wstcp/", "http://"+s.Remote+"/wstcp/")
+func (s *Relay) WssTunnelClientTcpHandle(c *net.TCPConn) error {
+	ws_config, err := websocket.NewConfig("wss://"+s.Remote+"/wstcp/", "https://"+s.Remote+"/wstcp/")
 	if err != nil {
 		return err
 	}
+	ws_config.TlsConfig = &tls.Config{InsecureSkipVerify: true}
 	ws_config.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4240.198 Safari/537.36")
 	ws_config.Header.Set("X-Forward-For", s.RIP)
 	ws_config.Header.Set("X-Forward-Host", "www.upyun.com")
@@ -59,7 +61,7 @@ func (s *Relay) WsTunnelClientTcpHandle(c *net.TCPConn) error {
 	return nil
 }
 
-func (s *Relay) RunWsTunnelUdpClient() error {
+func (s *Relay) RunWssTunnelUdpClient() error {
 	var err error
 	s.UDPConn, err = net.ListenUDP("udp", s.UDPAddr)
 	if err != nil {
@@ -89,17 +91,18 @@ func (s *Relay) RunWsTunnelUdpClient() error {
 			c := NewUDPDistribute(s.UDPConn, addr)
 			table[addr.String()] = c
 			c.Cache <- buf
-			s.WsTunnelClientUdpHandle(c)
+			s.WssTunnelClientUdpHandle(c)
 		}()
 	}
 	return nil
 }
 
-func (s *Relay) WsTunnelClientUdpHandle(c net.Conn) error {
-	ws_config, err := websocket.NewConfig("ws://"+s.Remote+"/wsudp/", "http://"+s.Remote+"/wsudp/")
+func (s *Relay) WssTunnelClientUdpHandle(c net.Conn) error {
+	ws_config, err := websocket.NewConfig("wss://"+s.Remote+"/wsudp/", "https://"+s.Remote+"/wsudp/")
 	if err != nil {
 		return err
 	}
+	ws_config.TlsConfig = &tls.Config{InsecureSkipVerify: true}
 	ws_config.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4240.198 Safari/537.36")
 	// ws_config.Header.Set("X-Forward-For", s.RemoteTCPAddr.IP.String())
 	ws_config.Header.Set("X-Forward-Host", "www.upyun.com")

@@ -9,7 +9,7 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-func (s *Relay) RunWsTunnelServer(tcp, udp bool) error {
+func (s *Relay) RunWssTunnelServer(tcp, udp bool) error {
 	var err error
 	s.TCPListen, err = net.ListenTCP("tcp", s.TCPAddr)
 	if err != nil {
@@ -23,16 +23,15 @@ func (s *Relay) RunWsTunnelServer(tcp, udp bool) error {
 		return
 	})
 	if tcp {
-		Router.Handle("/wstcp/", websocket.Handler(s.WsTunnelServerTcpHandle))
+		Router.Handle("/wstcp/", websocket.Handler(s.WssTunnelServerTcpHandle))
 	}
 	if udp {
-		Router.Handle("/wsudp/", websocket.Handler(s.WsTunnelServerUdpHandle))
+		Router.Handle("/wsudp/", websocket.Handler(s.WssTunnelServerUdpHandle))
 	}
-	http.Serve(s.TCPListen, Router)
+	http.ServeTLS(s.TCPListen, Router, certFile, keyFile)
 	return nil
 }
-
-func (s *Relay) WsTunnelServerTcpHandle(ws *websocket.Conn) {
+func (s *Relay) WssTunnelServerTcpHandle(ws *websocket.Conn) {
 	ws.PayloadType = websocket.BinaryFrame
 	defer ws.Close()
 
@@ -47,7 +46,7 @@ func (s *Relay) WsTunnelServerTcpHandle(ws *websocket.Conn) {
 	return
 }
 
-func (s *Relay) WsTunnelServerUdpHandle(ws *websocket.Conn) {
+func (s *Relay) WssTunnelServerUdpHandle(ws *websocket.Conn) {
 	ws.PayloadType = websocket.BinaryFrame
 	defer ws.Close()
 
