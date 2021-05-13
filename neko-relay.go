@@ -17,7 +17,7 @@ var (
 	key          = flag.String("key", "key", "api key")
 	port         = flag.String("port", "8080", "api port")
 	debug        = flag.Bool("debug", false, "enable debug")
-	show_version = flag.Bool("version", false, "show version")
+	show_version = flag.Bool("v", false, "show version")
 )
 
 func resp(c *gin.Context, success bool, data interface{}, code int) {
@@ -59,8 +59,8 @@ func ParseRule(c *gin.Context) (rid string, err error) {
 func main() {
 	flag.Parse()
 	if *show_version != false {
-		fmt.Println("neko-relay v1.2")
-		fmt.Println("TCP & UDP & WSTUNNEL & STAT")
+		fmt.Println("neko-relay v1.3")
+		fmt.Println("TCP & UDP & WS TUNNEL && WSS TUNNEL & STAT")
 		return
 	}
 	if *debug != true {
