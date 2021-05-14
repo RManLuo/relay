@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"log"
 	"net"
-	"time"
 
 	"golang.org/x/net/websocket"
 )
@@ -23,12 +22,6 @@ func (s *Relay) RunWssTunnelTcpClient() error {
 		}
 		go func(c *net.TCPConn) {
 			defer c.Close()
-			if s.TCPTimeout != 0 {
-				if err := c.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {
-					log.Println(err)
-					return
-				}
-			}
 			if err := s.WssTunnelClientTcpHandle(c); err != nil {
 				log.Println(err)
 			}

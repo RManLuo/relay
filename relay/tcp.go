@@ -21,12 +21,6 @@ func (s *Relay) RunTCPServer() error {
 		}
 		go func(c *net.TCPConn) {
 			defer c.Close()
-			if s.TCPTimeout != 0 {
-				if err := c.SetDeadline(time.Now().Add(time.Duration(s.TCPTimeout) * time.Second)); err != nil {
-					log.Println(err)
-					return
-				}
-			}
 			if err := s.TCPHandle(c); err != nil {
 				log.Println(err)
 			}
