@@ -112,9 +112,15 @@ func main() {
 	})
 	r.POST("/del", func(c *gin.Context) {
 		rid := c.PostForm("rid")
+		rule := Rules[rid]
+		traffic := Traffic[rid]
 		del(rid)
 		delete(Rules, rid)
-		resp(c, true, nil, 200)
+		delete(Traffic, rid)
+		resp(c, true, gin.H{
+			"rule":    rule,
+			"traffic": traffic,
+		}, 200)
 	})
 	r.POST("/sync", func(c *gin.Context) {
 		newRules := make(map[string]Rule)

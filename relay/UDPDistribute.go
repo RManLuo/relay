@@ -26,8 +26,8 @@ func NewUDPDistribute(conn *(net.UDPConn), addr net.Addr) *UDPDistribute {
 
 func (this *UDPDistribute) Close() error {
 	this.Connected = false
-	// return this.Conn.Close()
-	return nil
+	return this.Conn.Close()
+	// return nil
 }
 
 func (this *UDPDistribute) Read(b []byte) (n int, err error) {
