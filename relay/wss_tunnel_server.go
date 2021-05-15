@@ -9,7 +9,7 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-func (s *Relay) RunWssTunnelServer(tcp, udp bool) error {
+func (s *Relay) RunWssTunnelServer(tcp, udp bool, certFile, keyFile string) error {
 	var err error
 	s.TCPListen, err = net.ListenTCP("tcp", s.TCPAddr)
 	if err != nil {

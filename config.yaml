@@ -1,0 +1,6 @@
+key: key
+port: 8080
+debug: true
+certfile: public.pem
+keyfile: private.key
+syncfile: rules.json

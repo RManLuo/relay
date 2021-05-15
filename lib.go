@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"neko-relay/relay"
 	"net"
 	"strconv"
@@ -47,6 +48,48 @@ func del(rid string) {
 		Svr.Shutdown()
 		time.Sleep(10 * time.Millisecond)
 		delete(Svrs, rid)
+	}
+}
+
+func sync(newRules map[string]Rule) {
+	for rid, r := range newRules {
+		rip, err := getIP(r.Remote)
+		if err == nil {
+			nr := Rule{Port: r.Port, Remote: r.Remote, RIP: rip, Rport: r.Rport, Type: r.Type}
+			pass, _ := check(nr)
+			if pass {
+				newRules[rid] = nr
+			} else {
+				delete(newRules, rid)
+			}
+		} else {
+			delete(newRules, rid)
+		}
+	}
+	if config.Debug {
+		fmt.Println(newRules)
+	}
+	for rid := range Rules {
+		rule, has := newRules[rid]
+		if has && rule == Rules[rid] {
+			delete(newRules, rid)
+		} else {
+			del(rid)
+			time.Sleep(1 * time.Millisecond)
+			delete(Rules, rid)
+		}
+	}
+	for rid, rule := range newRules {
+		if config.Debug {
+			fmt.Println(rule)
+		}
+		Rules[rid] = rule
+		_, has := Traffic[rid]
+		if !has {
+			Traffic[rid] = relay.NewTF()
+		}
+		go add(rid)
+		time.Sleep(5 * time.Millisecond)
 	}
 }
 

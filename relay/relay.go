@@ -10,7 +10,10 @@ import (
 	"github.com/txthinking/runnergroup"
 )
 
-// Relay is relay server.
+var (
+	CertFile, KeyFile string
+)
+
 type Relay struct {
 	TCPAddr     *net.TCPAddr
 	UDPAddr     *net.UDPAddr
@@ -118,7 +121,7 @@ func (s *Relay) ListenAndServe() error {
 	if s.Protocol == "wss_tunnel_server" {
 		s.RunnerGroup.Add(&runnergroup.Runner{
 			Start: func() error {
-				return s.RunWssTunnelServer(true, true)
+				return s.RunWssTunnelServer(true, true, CertFile, KeyFile)
 			},
 			Stop: func() error {
 				s.closeTCP()

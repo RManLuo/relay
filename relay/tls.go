@@ -17,22 +17,17 @@ import (
 	"time"
 )
 
-var (
-	certFile = "public.pem"
-	keyFile  = "private.key"
-)
-
 func GetCert() {
-	_, err := os.Stat(certFile)
+	_, err := os.Stat(CertFile)
 	if err != nil {
-		fmt.Println(certFile, "Not exit, generating ...")
-		CreateTLSFile(certFile, keyFile)
+		fmt.Println(CertFile, "Not exit, generating ...")
+		CreateTLSFile(CertFile, KeyFile)
 	}
 
-	_, err = os.Stat(keyFile)
+	_, err = os.Stat(KeyFile)
 	if err != nil {
-		fmt.Println(keyFile, "Not exit, generating ...")
-		CreateTLSFile(certFile, keyFile)
+		fmt.Println(KeyFile, "Not exit, generating ...")
+		CreateTLSFile(CertFile, KeyFile)
 	}
 }
 
