@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"fmt"
 	"net"
 	"time"
 )
@@ -10,6 +11,7 @@ func (s *Relay) RunTCPServer() error {
 	var err error
 	s.TCPListen, err = net.ListenTCP("tcp", s.TCPAddr)
 	if err != nil {
+		fmt.Print(s.Local, "<=>", s.Remote, err)
 		return err
 	}
 	defer s.TCPListen.Close()
