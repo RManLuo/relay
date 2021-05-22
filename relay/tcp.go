@@ -15,13 +15,18 @@ func (s *Relay) RunTCPServer() error {
 		return err
 	}
 	defer s.TCPListen.Close()
+	count := 0
 	for {
 		c, err := s.TCPListen.AcceptTCP()
 		if err != nil {
 			if err, ok := err.(net.Error); ok && err.Temporary() {
 				continue
 			}
-			break
+			count++
+			if count > 10 {
+				break
+			}
+			continue
 		}
 		go s.TCPHandle(c)
 	}
