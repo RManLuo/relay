@@ -2,7 +2,6 @@ package relay
 
 import (
 	"crypto/tls"
-	"log"
 	"net"
 
 	"golang.org/x/net/websocket"
@@ -18,14 +17,12 @@ func (s *Relay) RunWssTunnelTcpClient() error {
 	for {
 		c, err := s.TCPListen.AcceptTCP()
 		if err != nil {
-			return err
-		}
-		go func(c *net.TCPConn) {
-			defer c.Close()
-			if err := s.WssTunnelClientTcpHandle(c); err != nil {
-				log.Println(err)
+			if err, ok := err.(net.Error); ok && err.Temporary() {
+				continue
 			}
-		}(c)
+			break
+		}
+		go s.WssTunnelClientTcpHandle(c)
 	}
 	return nil
 }

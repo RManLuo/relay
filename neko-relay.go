@@ -55,11 +55,7 @@ func ParseRule(c *gin.Context) (rid string, err error) {
 	if !passed {
 		return
 	}
-	Rules[rid] = r
-	_, has := Traffic[rid]
-	if !has {
-		Traffic[rid] = relay.NewTF()
-	}
+	Rules.Set(rid, r)
 	return
 }
 func main() {
@@ -106,15 +102,11 @@ func main() {
 	r.POST("/traffic", func(c *gin.Context) {
 		reset, _ := strconv.ParseBool(c.DefaultPostForm("reset", "false"))
 		y := gin.H{}
-		for rid, tf := range Traffic {
+		for item := range Traffic.Iter() {
+			rid, tf := item.Key, item.Val.(*relay.TF)
 			y[rid] = tf.Total()
 			if reset {
-				_, has := Rules[rid]
-				if has {
-					tf.Reset()
-				} else {
-					delete(Traffic, rid)
-				}
+				tf.Reset()
 			}
 		}
 		resp(c, true, y, 200)
@@ -125,7 +117,7 @@ func main() {
 			resp(c, false, err.Error(), 500)
 			return
 		}
-		go add(rid)
+		go start(rid)
 		resp(c, true, nil, 200)
 	})
 	r.POST("/edit", func(c *gin.Context) {
@@ -134,17 +126,24 @@ func main() {
 			resp(c, false, err.Error(), 500)
 			return
 		}
-		del(rid)
-		go add(rid)
+		stop(rid)
+		go start(rid)
 		resp(c, true, nil, 200)
 	})
 	r.POST("/del", func(c *gin.Context) {
 		rid := c.PostForm("rid")
-		rule := Rules[rid]
-		traffic := Traffic[rid]
-		del(rid)
-		delete(Rules, rid)
-		delete(Traffic, rid)
+		rule, has := Rules.Get(rid)
+		if !has {
+			resp(c, false, gin.H{
+				"rule":    nil,
+				"traffic": 0,
+			}, 200)
+			return
+		}
+		traffic, _ := Traffic.Get(rid)
+		stop(rid)
+		Rules.Remove(rid)
+		Traffic.Remove(rid)
 		resp(c, true, gin.H{
 			"rule":    rule,
 			"traffic": traffic,
@@ -183,35 +182,6 @@ func main() {
 			resp(c, false, err, 500)
 		}
 	})
-
-	// Rules["test_iperf3"] = Rule{
-	// 	Port:   5202,
-	// 	Remote: "127.0.0.1",
-	// 	RIP:    "127.0.0.1",
-	// 	Rport:  uint(5201),
-	// 	Type:   "tcp+udp",
-	// }
-	// go add("test_iperf3")
-	// time.Sleep(10 * time.Millisecond)
-	// Rules["test_server"] = Rule{
-	// 	Port:   3333,
-	// 	Remote: "127.0.0.1",
-	// 	RIP:    "127.0.0.1",
-	// 	Rport:  uint(5201),
-	// 	Type:   "wss_tunnel_server",
-	// }
-	// go add("test_server")
-	// time.Sleep(10 * time.Millisecond)
-	// Rules["test_client"] = Rule{
-	// 	Port:   4444,
-	// 	Remote: "127.0.0.1",
-	// 	RIP:    "127.0.0.1",
-	// 	Rport:  uint(3333),
-	// 	Type:   "wss_tunnel_client",
-	// }
-	// go add("test_client")
-	// time.Sleep(10 * time.Millisecond)
-
 	go ddns()
 	fmt.Println("Api port:", config.Port)
 	fmt.Println("Api key:", config.Key)

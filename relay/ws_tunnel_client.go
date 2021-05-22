@@ -1,7 +1,6 @@
 package relay
 
 import (
-	"log"
 	"net"
 
 	"golang.org/x/net/websocket"
@@ -17,19 +16,18 @@ func (s *Relay) RunWsTunnelTcpClient() error {
 	for {
 		c, err := s.TCPListen.AcceptTCP()
 		if err != nil {
-			return err
-		}
-		go func(c *net.TCPConn) {
-			defer c.Close()
-			if err := s.WsTunnelClientTcpHandle(c); err != nil {
-				log.Println(err)
+			if err, ok := err.(net.Error); ok && err.Temporary() {
+				continue
 			}
-		}(c)
+			break
+		}
+		go s.WsTunnelClientTcpHandle(c)
 	}
 	return nil
 }
 
 func (s *Relay) WsTunnelClientTcpHandle(c *net.TCPConn) error {
+	defer c.Close()
 	ws_config, err := websocket.NewConfig("ws://"+s.Remote+"/wstcp/", "http://"+s.Remote+"/wstcp/")
 	if err != nil {
 		return err
@@ -44,8 +42,8 @@ func (s *Relay) WsTunnelClientTcpHandle(c *net.TCPConn) error {
 	if err != nil {
 		return err
 	}
-	rc.PayloadType = websocket.BinaryFrame
 	defer rc.Close()
+	rc.PayloadType = websocket.BinaryFrame
 
 	go Copy(rc, c, s.Traffic)
 	Copy(c, rc, s.Traffic)
@@ -89,6 +87,7 @@ func (s *Relay) RunWsTunnelUdpClient() error {
 }
 
 func (s *Relay) WsTunnelClientUdpHandle(c net.Conn) error {
+	defer c.Close()
 	ws_config, err := websocket.NewConfig("ws://"+s.Remote+"/wsudp/", "http://"+s.Remote+"/wsudp/")
 	if err != nil {
 		return err
@@ -103,8 +102,8 @@ func (s *Relay) WsTunnelClientUdpHandle(c net.Conn) error {
 	if err != nil {
 		return err
 	}
-	rc.PayloadType = websocket.BinaryFrame
 	defer rc.Close()
+	rc.PayloadType = websocket.BinaryFrame
 
 	go Copy(c, rc, s.Traffic)
 	Copy(rc, c, s.Traffic)

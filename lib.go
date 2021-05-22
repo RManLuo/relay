@@ -6,6 +6,8 @@ import (
 	"net"
 	"strconv"
 	"time"
+
+	cmap "github.com/orcaman/concurrent-map"
 )
 
 type Rule struct {
@@ -17,40 +19,48 @@ type Rule struct {
 }
 
 var (
-	Rules   = make(map[string]Rule)
-	Traffic = make(map[string]*relay.TF)
-	Svrs    = make(map[string]*relay.Relay)
+	Rules   = cmap.New()
+	Traffic = cmap.New()
+	Svrs    = cmap.New()
 )
 
-func add(rid string) (err error) {
-	r := Rules[rid]
-	local_addr := ":" + strconv.Itoa(int(r.Port))
-	remote_addr := r.RIP + ":" + strconv.Itoa(int(r.Rport))
-	_, has := Traffic[rid]
-	if !has {
-		Traffic[rid] = relay.NewTF()
+func getTF(rid string) (tf *relay.TF) {
+	Tf, hast := Traffic.Get(rid)
+	if hast {
+		tf = Tf.(*relay.TF)
 	}
-	Svrs[rid], err = relay.NewRelay(local_addr, remote_addr, r.RIP, 30, 10, Traffic[rid], r.Type)
-	Svrs[rid].ListenAndServe()
-	// fmt.Println(local_addr, "<=>", remote_addr)
-
-	// if strings.Contains(r.Type, "tcp") {
-	// 	add_tcp(rid, local_addr, remote_addr)
-	// }
-	// if strings.Contains(r.Type, "udp") {
-	// 	add_udp(rid, local_addr, remote_addr)
-	// }
+	if !hast {
+		tf = relay.NewTF()
+		Traffic.Set(rid, tf)
+	}
 	return
 }
-func del(rid string) {
-	Svr, has := Svrs[rid]
+
+func start(rid string) (err error) {
+	rule, hasr := Rules.Get(rid)
+	if !hasr {
+		return
+	}
+	r := rule.(Rule)
+	local_addr := ":" + strconv.Itoa(int(r.Port))
+	remote_addr := r.RIP + ":" + strconv.Itoa(int(r.Rport))
+
+	svr, err := relay.NewRelay(local_addr, remote_addr, r.RIP, 30, 10, getTF(rid), r.Type)
+	if err != nil {
+		return
+	}
+	Svrs.Set(rid, svr)
+	svr.Serve()
+	return
+}
+func stop(rid string) {
+	Svr, has := Svrs.Get(rid)
 	if has {
-		Svr.Shutdown()
-		time.Sleep(10 * time.Millisecond)
-		delete(Svrs, rid)
+		Svr.(*relay.Relay).Close()
+		// time.Sleep(10 * time.Millisecond)
+		Svrs.Remove(rid)
 	}
 }
-
 func sync(newRules map[string]Rule) {
 	for rid, r := range newRules {
 		rip, err := getIP(r.Remote)
@@ -69,27 +79,24 @@ func sync(newRules map[string]Rule) {
 	if config.Debug {
 		fmt.Println(newRules)
 	}
-	for rid := range Rules {
+	for item := range Rules.Iter() {
+		rid := item.Key
 		rule, has := newRules[rid]
-		if has && rule == Rules[rid] {
+		if has && rule == item.Val {
 			delete(newRules, rid)
 		} else {
-			del(rid)
-			time.Sleep(1 * time.Millisecond)
-			delete(Rules, rid)
+			stop(rid)
+			// time.Sleep(1 * time.Millisecond)
+			Rules.Remove(rid)
 		}
 	}
 	for rid, rule := range newRules {
 		if config.Debug {
 			fmt.Println(rule)
 		}
-		Rules[rid] = rule
-		_, has := Traffic[rid]
-		if !has {
-			Traffic[rid] = relay.NewTF()
-		}
-		go add(rid)
-		time.Sleep(5 * time.Millisecond)
+		Rules.Set(rid, rule)
+		go start(rid)
+		// time.Sleep(5 * time.Millisecond)
 	}
 }
 
@@ -105,12 +112,13 @@ func getIP(host string) (ip string, err error) {
 func ddns() {
 	for {
 		time.Sleep(time.Second * 60)
-		for rid, rule := range Rules {
+		for item := range Rules.Iter() {
+			rid, rule := item.Key, item.Val.(Rule)
 			RIP, err := getIP(rule.Remote)
 			if err == nil && RIP != rule.RIP {
 				rule.RIP = RIP
-				del(rid)
-				go add(rid)
+				stop(rid)
+				go start(rid)
 			}
 		}
 	}

@@ -16,19 +16,21 @@ func (s *Relay) RunWsTunnelServer(tcp, udp bool) error {
 		return err
 	}
 	defer s.TCPListen.Close()
-	Router := http.NewServeMux()
-	Router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	handler := http.NewServeMux()
+	handler.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(404)
 		io.WriteString(w, "Never gonna give you up!")
 		return
 	})
 	if tcp {
-		Router.Handle("/wstcp/", websocket.Handler(s.WsTunnelServerTcpHandle))
+		handler.Handle("/wstcp/", websocket.Handler(s.WsTunnelServerTcpHandle))
 	}
 	if udp {
-		Router.Handle("/wsudp/", websocket.Handler(s.WsTunnelServerUdpHandle))
+		handler.Handle("/wsudp/", websocket.Handler(s.WsTunnelServerUdpHandle))
 	}
-	http.Serve(s.TCPListen, Router)
+	svr := &http.Server{Handler: handler}
+	svr.Serve(s.TCPListen)
+	defer svr.Shutdown(nil)
 	return nil
 }
 

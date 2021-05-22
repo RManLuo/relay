@@ -1,7 +1,6 @@
 package relay
 
 import (
-	"log"
 	"net"
 	"time"
 )
@@ -17,25 +16,23 @@ func (s *Relay) RunTCPServer() error {
 	for {
 		c, err := s.TCPListen.AcceptTCP()
 		if err != nil {
-			return err
-		}
-		go func(c *net.TCPConn) {
-			defer c.Close()
-			if err := s.TCPHandle(c); err != nil {
-				log.Println(err)
+			if err, ok := err.(net.Error); ok && err.Temporary() {
+				continue
 			}
-		}(c)
+			break
+		}
+		go s.TCPHandle(c)
 	}
 	return nil
 }
 
 // TCPHandle handles request.
 func (s *Relay) TCPHandle(c *net.TCPConn) error {
-	tmp, err := net.DialTimeout("tcp", s.Remote, time.Duration(s.TCPTimeout)*time.Second)
+	defer c.Close()
+	rc, err := net.DialTimeout("tcp", s.Remote, time.Duration(s.TCPTimeout)*time.Second)
 	if err != nil {
 		return err
 	}
-	rc := tmp.(*net.TCPConn)
 	defer rc.Close()
 	go Copy(c, rc, s.Traffic)
 	Copy(rc, c, s.Traffic)
