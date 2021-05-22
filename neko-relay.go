@@ -82,7 +82,7 @@ func main() {
 		// fmt.Println(config)
 	}
 	if show_version != false {
-		fmt.Println("neko-relay v1.3")
+		fmt.Println("neko-relay v1.4.1")
 		fmt.Println("TCP & UDP & WS TUNNEL && WSS TUNNEL & STAT")
 		return
 	}
