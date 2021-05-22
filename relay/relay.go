@@ -45,18 +45,6 @@ func NewRelay(local, remote, rip string, tcpTimeout, udpTimeout int, traffic *TF
 	}
 	return s, nil
 }
-func (s *Relay) closeTCP() error {
-	if s.TCPListen != nil {
-		return s.TCPListen.Close()
-	}
-	return nil
-}
-func (s *Relay) closeUDP() error {
-	if s.UDPConn != nil {
-		return s.UDPConn.Close()
-	}
-	return nil
-}
 
 // Run server.
 func (s *Relay) Serve() error {
