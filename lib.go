@@ -61,32 +61,21 @@ func stop(rid string) {
 		Svrs.Remove(rid)
 	}
 }
+func cmp(x, y Rule) bool {
+	return x.Port == y.Port && x.Remote == y.Remote && x.Rport == y.Rport && x.Type == y.Type
+}
 func sync(newRules map[string]Rule) {
-	for rid, r := range newRules {
-		rip, err := getIP(r.Remote)
-		if err == nil {
-			nr := Rule{Port: r.Port, Remote: r.Remote, RIP: rip, Rport: r.Rport, Type: r.Type}
-			pass, _ := check(nr)
-			if pass {
-				newRules[rid] = nr
-			} else {
-				delete(newRules, rid)
-			}
-		} else {
-			delete(newRules, rid)
-		}
-	}
 	if config.Debug {
 		fmt.Println(newRules)
 	}
 	for item := range Rules.Iter() {
 		rid := item.Key
 		rule, has := newRules[rid]
-		if has && rule == item.Val {
+		if has && cmp(rule, item.Val.(Rule)) {
 			delete(newRules, rid)
 		} else {
 			stop(rid)
-			// time.Sleep(1 * time.Millisecond)
+			time.Sleep(1 * time.Millisecond)
 			Rules.Remove(rid)
 		}
 	}
@@ -94,9 +83,18 @@ func sync(newRules map[string]Rule) {
 		if config.Debug {
 			fmt.Println(rule)
 		}
+		rip, err := getIP(rule.Remote)
+		if err != nil {
+			continue
+		}
+		rule.RIP = rip
+		pass, _ := check(rule)
+		if !pass {
+			continue
+		}
 		Rules.Set(rid, rule)
 		go start(rid)
-		// time.Sleep(5 * time.Millisecond)
+		time.Sleep(1 * time.Millisecond)
 	}
 }
 

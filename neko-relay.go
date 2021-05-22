@@ -163,6 +163,14 @@ func main() {
 		resp(c, true, Rules, 200)
 	})
 
+	r.GET("/stat", func(c *gin.Context) {
+		res, err := stat.GetStat()
+		if err == nil {
+			resp(c, true, res, 200)
+		} else {
+			resp(c, false, err, 500)
+		}
+	})
 	if config.Syncfile != "" {
 		data, err := ioutil.ReadFile(config.Syncfile)
 		if err == nil {
@@ -173,15 +181,6 @@ func main() {
 			log.Println(err)
 		}
 	}
-
-	r.GET("/stat", func(c *gin.Context) {
-		res, err := stat.GetStat()
-		if err == nil {
-			resp(c, true, res, 200)
-		} else {
-			resp(c, false, err, 500)
-		}
-	})
 	go ddns()
 	fmt.Println("Api port:", config.Port)
 	fmt.Println("Api key:", config.Key)
