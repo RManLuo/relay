@@ -68,7 +68,7 @@ func main() {
 	flag.StringVar(&config.Certfile, "certfile", "public.pem", "cert file")
 	flag.StringVar(&config.Keyfile, "keyfile", "private.key", "key file")
 	flag.StringVar(&config.Syncfile, "syncfile", "", "sync file")
-	flag.BoolVar(&Debug, "config.Debug", false, "enable config.Debug")
+	flag.BoolVar(&Debug, "debug", false, "enable config.Debug")
 	flag.BoolVar(&show_version, "v", false, "show version")
 	flag.Parse()
 	if confpath != "" {
