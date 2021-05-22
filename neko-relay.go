@@ -64,11 +64,9 @@ func main() {
 	flag.StringVar(&confpath, "c", "", "config")
 	flag.StringVar(&config.Key, "key", "key", "api key")
 	flag.IntVar(&config.Port, "port", 8080, "api port")
-	flag.BoolVar(&config.Debug, "config.Debug", false, "enable config.Debug")
 	flag.StringVar(&config.Certfile, "certfile", "public.pem", "cert file")
 	flag.StringVar(&config.Keyfile, "keyfile", "private.key", "key file")
 	flag.StringVar(&config.Syncfile, "syncfile", "", "sync file")
-	flag.BoolVar(&show_version, "v", false, "show version")
 	flag.Parse()
 	if confpath != "" {
 		data, err := ioutil.ReadFile(confpath)
@@ -81,6 +79,8 @@ func main() {
 		}
 		// fmt.Println(config)
 	}
+	flag.BoolVar(&config.Debug, "config.Debug", false, "enable config.Debug")
+	flag.BoolVar(&show_version, "v", false, "show version")
 	if show_version != false {
 		fmt.Println("neko-relay v1.4.1")
 		fmt.Println("TCP & UDP & WS TUNNEL && WSS TUNNEL & STAT")

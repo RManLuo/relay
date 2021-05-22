@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -13,6 +14,7 @@ func (s *Relay) RunWsTunnelServer(tcp, udp bool) error {
 	var err error
 	s.TCPListen, err = net.ListenTCP("tcp", s.TCPAddr)
 	if err != nil {
+		fmt.Println("Listen", s.Local, err)
 		return err
 	}
 	defer s.TCPListen.Close()
@@ -38,11 +40,11 @@ func (s *Relay) WsTunnelServerTcpHandle(ws *websocket.Conn) {
 	ws.PayloadType = websocket.BinaryFrame
 	defer ws.Close()
 
-	tmp, err := net.DialTimeout("tcp", s.Remote, time.Duration(s.TCPTimeout)*time.Second)
+	rc, err := net.DialTimeout("tcp", s.Remote, time.Duration(s.TCPTimeout)*time.Second)
 	if err != nil {
+		fmt.Println("Dial", s.Local, "<=>", s.Remote, err)
 		return
 	}
-	rc := tmp.(*net.TCPConn)
 	defer rc.Close()
 	go Copy(rc, ws, s.Traffic)
 	Copy(ws, rc, s.Traffic)

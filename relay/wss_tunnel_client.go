@@ -2,7 +2,9 @@ package relay
 
 import (
 	"crypto/tls"
+	"fmt"
 	"net"
+	"time"
 
 	"golang.org/x/net/websocket"
 )
@@ -11,16 +13,24 @@ func (s *Relay) RunWssTunnelTcpClient() error {
 	var err error
 	s.TCPListen, err = net.ListenTCP("tcp", s.TCPAddr)
 	if err != nil {
+		fmt.Println("Listen", s.Local, err)
 		return err
 	}
 	defer s.TCPListen.Close()
+	count := 0
 	for {
 		c, err := s.TCPListen.AcceptTCP()
 		if err != nil {
 			if err, ok := err.(net.Error); ok && err.Temporary() {
+				fmt.Println("Accept", s.Local, err)
 				continue
 			}
-			break
+			count++
+			if count > 10 {
+				break
+			}
+			time.Sleep(10 * time.Second)
+			continue
 		}
 		go s.WssTunnelClientTcpHandle(c)
 	}
@@ -41,6 +51,7 @@ func (s *Relay) WssTunnelClientTcpHandle(c *net.TCPConn) error {
 
 	rc, err := websocket.DialConfig(ws_config)
 	if err != nil {
+		fmt.Println("Dial ws", s.Remote, err)
 		return err
 	}
 	rc.PayloadType = websocket.BinaryFrame
