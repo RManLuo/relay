@@ -18,7 +18,9 @@ func (s *Relay) RunTCPServer() error {
 	count := 0
 	for {
 		c, err := s.TCPListen.AcceptTCP()
-		if err != nil {
+		if err == nil {
+			count = 0
+		} else {
 			if err, ok := err.(net.Error); ok && err.Temporary() {
 				fmt.Println("Accept", s.Local, err)
 				continue

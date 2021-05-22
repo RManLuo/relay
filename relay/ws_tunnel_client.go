@@ -16,16 +16,18 @@ func (s *Relay) RunWsTunnelTcpClient() error {
 		return err
 	}
 	defer s.TCPListen.Close()
-	count := 0
+	counter := 0
 	for {
 		c, err := s.TCPListen.AcceptTCP()
-		if err != nil {
+		if err == nil {
+			counter = 0
+		} else {
 			if err, ok := err.(net.Error); ok && err.Temporary() {
 				fmt.Println("Accept", s.Local, err)
 				continue
 			}
-			count++
-			if count > 10 {
+			counter++
+			if counter > 10 {
 				break
 			}
 			time.Sleep(10 * time.Second)
