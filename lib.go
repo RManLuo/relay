@@ -94,7 +94,7 @@ func sync(newRules map[string]Rule) {
 		}
 		Rules.Set(rid, rule)
 		go start(rid)
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 	}
 }
 
