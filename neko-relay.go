@@ -176,7 +176,7 @@ func main() {
 		if err == nil {
 			newRules := make(map[string]Rule)
 			json.Unmarshal(data, &newRules)
-			sync(newRules)
+			go sync(newRules)
 		} else {
 			log.Println(err)
 		}
