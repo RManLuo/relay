@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"neko-relay/config"
 	"neko-relay/relay"
 	"neko-relay/stat"
 	"strconv"
@@ -15,16 +16,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-type CONF struct {
-	Key      string
-	Port     int
-	Debug    bool
-	Certfile string
-	Keyfile  string
-	Syncfile string
-}
-
-var config CONF
+var Config config.CONF
 
 func resp(c *gin.Context, success bool, data interface{}, code int) {
 	c.JSON(code, gin.H{
@@ -38,7 +30,7 @@ func check(r Rule) (bool, error) {
 	}
 	return true, nil
 }
-func ParseRule(c *gin.Context) (rid string, err error) {
+func ParseRule(c *gin.Context) (rid string, r Rule, err error) {
 	rid = c.PostForm("rid")
 	port, _ := strconv.Atoi(c.PostForm("port"))
 	Port := uint(port)
@@ -50,7 +42,7 @@ func ParseRule(c *gin.Context) (rid string, err error) {
 	if err != nil {
 		return
 	}
-	var r = Rule{Port: Port, Remote: remote, RIP: RIP, Rport: Rport, Type: typ}
+	r = Rule{Port: Port, Remote: remote, RIP: RIP, Rport: Rport, Type: typ}
 	passed, err := check(r)
 	if !passed {
 		return
@@ -63,12 +55,12 @@ func main() {
 	var show_version bool
 	Debug := false
 	flag.StringVar(&confpath, "c", "", "config")
-	flag.StringVar(&config.Key, "key", "key", "api key")
-	flag.IntVar(&config.Port, "port", 8080, "api port")
-	flag.StringVar(&config.Certfile, "certfile", "public.pem", "cert file")
-	flag.StringVar(&config.Keyfile, "keyfile", "private.key", "key file")
-	flag.StringVar(&config.Syncfile, "syncfile", "", "sync file")
-	flag.BoolVar(&Debug, "debug", false, "enable config.Debug")
+	flag.StringVar(&Config.Key, "key", "key", "api key")
+	flag.IntVar(&Config.Port, "port", 8080, "api port")
+	flag.StringVar(&Config.Certfile, "certfile", "public.pem", "cert file")
+	flag.StringVar(&Config.Keyfile, "keyfile", "private.key", "key file")
+	flag.StringVar(&Config.Syncfile, "syncfile", "", "sync file")
+	flag.BoolVar(&Debug, "debug", false, "enable Config.Debug")
 	flag.BoolVar(&show_version, "v", false, "show version")
 	flag.Parse()
 	if confpath != "" {
@@ -76,29 +68,28 @@ func main() {
 		if err != nil {
 			log.Panic(err)
 		}
-		err = yaml.Unmarshal([]byte(data), &config)
+		err = yaml.Unmarshal([]byte(data), &Config)
 		if err != nil {
 			panic(err)
 		}
-		// fmt.Println(config)
+		// fmt.Println(Config)
 	}
-	config.Debug = Debug
+	Config.Debug = Debug
 	if show_version != false {
 		fmt.Println("neko-relay v1.4.1")
 		fmt.Println("TCP & UDP & WS TUNNEL && WSS TUNNEL & STAT")
 		return
 	}
-	if config.Debug != true {
+	if Config.Debug != true {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	relay.CertFile = config.Certfile
-	relay.KeyFile = config.Keyfile
+	relay.Config = Config
 	relay.GetCert()
 	r := gin.New()
-	r.GET("/data/"+config.Key, func(c *gin.Context) {
+	r.GET("/data/"+Config.Key, func(c *gin.Context) {
 		c.JSON(200, gin.H{"Rules": Rules, "Svrs": Svrs, "Traffic": Traffic})
 	})
-	if config.Debug != true {
+	if Config.Debug != true {
 		r.Use(webMiddleware)
 	}
 	r.POST("/traffic", func(c *gin.Context) {
@@ -114,22 +105,22 @@ func main() {
 		resp(c, true, y, 200)
 	})
 	r.POST("/add", func(c *gin.Context) {
-		rid, err := ParseRule(c)
+		rid, r, err := ParseRule(c)
 		if err != nil {
 			resp(c, false, err.Error(), 500)
 			return
 		}
-		go start(rid)
+		go start(rid, r)
 		resp(c, true, nil, 200)
 	})
 	r.POST("/edit", func(c *gin.Context) {
-		rid, err := ParseRule(c)
+		rid, r, err := ParseRule(c)
 		if err != nil {
 			resp(c, false, err.Error(), 500)
 			return
 		}
 		stop(rid)
-		go start(rid)
+		go start(rid, r)
 		resp(c, true, nil, 200)
 	})
 	r.POST("/del", func(c *gin.Context) {
@@ -155,8 +146,8 @@ func main() {
 		newRules := make(map[string]Rule)
 		data := []byte(c.PostForm("rules"))
 		json.Unmarshal(data, &newRules)
-		if config.Syncfile != "" {
-			err := ioutil.WriteFile(config.Syncfile, data, 0644)
+		if Config.Syncfile != "" {
+			err := ioutil.WriteFile(Config.Syncfile, data, 0644)
 			if err != nil {
 				log.Println(err)
 			}
@@ -173,8 +164,8 @@ func main() {
 			resp(c, false, err, 500)
 		}
 	})
-	if config.Syncfile != "" {
-		data, err := ioutil.ReadFile(config.Syncfile)
+	if Config.Syncfile != "" {
+		data, err := ioutil.ReadFile(Config.Syncfile)
 		if err == nil {
 			newRules := make(map[string]Rule)
 			json.Unmarshal(data, &newRules)
@@ -184,12 +175,12 @@ func main() {
 		}
 	}
 	go ddns()
-	fmt.Println("Api port:", config.Port)
-	fmt.Println("Api key:", config.Key)
-	r.Run(":" + strconv.Itoa(config.Port))
+	fmt.Println("Api port:", Config.Port)
+	fmt.Println("Api key:", Config.Key)
+	r.Run(":" + strconv.Itoa(Config.Port))
 }
 func webMiddleware(c *gin.Context) {
-	if c.Request.Header.Get("key") != config.Key {
+	if c.Request.Header.Get("key") != Config.Key {
 		resp(c, false, "Api key Incorrect", 500)
 		c.Abort()
 		return

@@ -3,12 +3,13 @@ package relay
 import (
 	"io"
 	"log"
+	"neko-relay/config"
 	"neko-relay/limits"
 	"net"
 )
 
 var (
-	CertFile, KeyFile string
+	Config config.CONF
 )
 
 type Relay struct {
@@ -74,7 +75,7 @@ func (s *Relay) Serve() error {
 	}
 
 	if s.Protocol == "wss_tunnel_server" {
-		go s.RunWssTunnelServer(true, true, CertFile, KeyFile)
+		go s.RunWssTunnelServer(true, true)
 	}
 	if s.Protocol == "wss_tunnel_client" {
 		go s.RunWssTunnelTcpClient()
@@ -86,10 +87,12 @@ func (s *Relay) Serve() error {
 // Shutdown server.
 func (s *Relay) Close() error {
 	if s.TCPListen != nil {
-		return s.TCPListen.Close()
+		s.TCPListen.Close()
+		s.TCPListen = nil
 	}
 	if s.UDPConn != nil {
-		return s.UDPConn.Close()
+		s.UDPConn.Close()
+		s.UDPConn = nil
 	}
 	return nil
 }
@@ -104,16 +107,15 @@ func Copy(dst io.Writer, src io.Reader, tf *TF) error {
 	// }
 	// return nil
 	var buf [1024 * 16]byte
-	for {
+	for tf != nil {
 		n, err := src.Read(buf[:])
 		if err != nil {
-			return nil
+			break
 		}
-		if tf != nil {
-			tf.Add(uint64(n))
-		}
+		tf.Add(uint64(n))
 		if _, err := dst.Write(buf[0:n]); err != nil {
-			return nil
+			break
 		}
 	}
+	return nil
 }

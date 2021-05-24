@@ -1,7 +1,6 @@
 package relay
 
 import (
-	"io"
 	"net"
 	"net/http"
 	"time"
@@ -9,7 +8,7 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-func (s *Relay) RunWssTunnelServer(tcp, udp bool, certFile, keyFile string) error {
+func (s *Relay) RunWssTunnelServer(tcp, udp bool) error {
 	var err error
 	s.TCPListen, err = net.ListenTCP("tcp", s.TCPAddr)
 	if err != nil {
@@ -17,19 +16,15 @@ func (s *Relay) RunWssTunnelServer(tcp, udp bool, certFile, keyFile string) erro
 	}
 	defer s.TCPListen.Close()
 	handler := http.NewServeMux()
-	handler.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(404)
-		io.WriteString(w, "Never gonna give you up!")
-		return
-	})
 	if tcp {
 		handler.Handle("/wstcp/", websocket.Handler(s.WssTunnelServerTcpHandle))
 	}
 	if udp {
 		handler.Handle("/wsudp/", websocket.Handler(s.WssTunnelServerUdpHandle))
 	}
+	handler.Handle("/", NewRP("https://www.upyun.com", "www.upyun.com"))
 	svr := &http.Server{Handler: handler}
-	svr.ServeTLS(s.TCPListen, certFile, keyFile)
+	svr.ServeTLS(s.TCPListen, Config.Certfile, Config.Keyfile)
 	defer svr.Shutdown(nil)
 	return nil
 }

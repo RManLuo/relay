@@ -18,16 +18,16 @@ import (
 )
 
 func GetCert() {
-	_, err := os.Stat(CertFile)
+	_, err := os.Stat(Config.Certfile)
 	if err != nil {
-		fmt.Println(CertFile, "Not exit, generating ...")
-		CreateTLSFile(CertFile, KeyFile)
+		fmt.Println(Config.Certfile, "Not exit, generating ...")
+		CreateTLSFile(Config.Certfile, Config.Keyfile)
 	}
 
-	_, err = os.Stat(KeyFile)
+	_, err = os.Stat(Config.Keyfile)
 	if err != nil {
-		fmt.Println(KeyFile, "Not exit, generating ...")
-		CreateTLSFile(CertFile, KeyFile)
+		fmt.Println(Config.Keyfile, "Not exit, generating ...")
+		CreateTLSFile(Config.Certfile, Config.Keyfile)
 	}
 }
 

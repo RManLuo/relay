@@ -6,43 +6,41 @@ import (
 	"time"
 )
 
-// RunTCPServer starts tcp server.
 func (s *Relay) RunTCPServer() error {
 	var err error
-	s.TCPListen, err = net.ListenTCP("tcp", s.TCPAddr)
-	if err != nil {
-		fmt.Println("Listen", s.Local, err)
-		return err
+	wait := 2.0
+	for s.TCPListen == nil {
+		s.TCPListen, err = net.ListenTCP("tcp", s.TCPAddr)
+		if err != nil {
+			fmt.Println("Listen TCP", s.Local, err, "(retry in", wait, "s)")
+			time.Sleep(time.Duration(wait) * time.Second)
+			wait *= 1.1
+		}
 	}
 	defer s.TCPListen.Close()
-	counter := 0
-	for {
+	wait = 1.0
+	for s.TCPListen != nil {
 		c, err := s.TCPListen.AcceptTCP()
 		if err == nil {
-			counter = 0
+			go s.TCPHandle(c)
+			wait = 1.0
 		} else {
+			fmt.Println("Accept", s.Local, err)
 			if err, ok := err.(net.Error); ok && err.Temporary() {
-				fmt.Println("Accept", s.Local, err)
 				continue
 			}
-			counter++
-			if counter > 10 {
-				break
-			}
-			time.Sleep(10 * time.Second)
-			continue
+			time.Sleep(time.Duration(wait) * time.Second)
+			wait *= 1.1
 		}
-		go s.TCPHandle(c)
 	}
 	return nil
 }
 
-// TCPHandle handles request.
 func (s *Relay) TCPHandle(c *net.TCPConn) error {
 	defer c.Close()
 	rc, err := net.DialTimeout("tcp", s.Remote, time.Duration(s.TCPTimeout)*time.Second)
 	if err != nil {
-		fmt.Println("Dial", s.Local, "<=>", s.Remote, err)
+		fmt.Println("Dial TCP", s.Local, "<=>", s.Remote, err)
 		return err
 	}
 	defer rc.Close()
