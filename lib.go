@@ -69,8 +69,8 @@ func sync(newRules map[string]Rule) {
 			delete(newRules, rid)
 		} else {
 			stop(rid)
-			time.Sleep(1 * time.Millisecond)
 			Rules.Remove(rid)
+			Traffic.Remove(rid)
 		}
 	}
 	for rid, r := range newRules {
