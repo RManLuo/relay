@@ -77,8 +77,8 @@ func main() {
 	}
 	Config.Debug = Debug
 	if show_version != false {
-		fmt.Println("neko-relay v1.4.1")
-		fmt.Println("TCP & UDP & WS TUNNEL && WSS TUNNEL & STAT")
+		fmt.Println("neko-relay v1.4.2")
+		fmt.Println("TCP & UDP & WS TUNNEL & WSS TUNNEL & HTTP & HTTPS & STAT")
 		return
 	}
 	if Config.Debug != true {
