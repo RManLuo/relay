@@ -4,3 +4,5 @@ debug: true
 certfile: public.pem
 keyfile: private.key
 syncfile: rules.json
+fakehost: www.upyun.com
+fakeurl: https://www.upyun.com

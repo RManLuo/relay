@@ -6,26 +6,26 @@ import (
 	"time"
 )
 
-func (s *Relay) RunUDPServer() error {
-	var err error
+func (s *Relay) ListenUDP() (err error) {
 	wait := 1.0
-	for s.UDPConn == nil {
+	for s.Status == 1 && s.UDPConn == nil {
 		s.UDPConn, err = net.ListenUDP("udp", s.UDPAddr)
 		if err != nil {
-			fmt.Println("Listen UDP", s.Local, err, "(retry in", wait, "s)")
+			fmt.Println("Listen UDP", s.Laddr, err, "(retry in", wait, "s)")
 			time.Sleep(time.Duration(wait) * time.Second)
 			wait *= 1.1
 		}
 	}
-	defer s.UDPConn.Close()
-
+	return
+}
+func (s *Relay) AcceptAndHandleUDP(handle func(c net.Conn) error) error {
+	wait := 1.0
 	table := make(map[string]*UDPDistribute)
 	buf := make([]byte, 1024*16)
-	wait = 1.0
-	for s.UDPConn != nil {
+	for s.Status == 1 && s.UDPConn != nil {
 		n, addr, err := s.UDPConn.ReadFrom(buf)
 		if err != nil {
-			fmt.Println("Accept", s.Local, err)
+			fmt.Println("Accept", s.Laddr, err)
 			if err, ok := err.(net.Error); ok && err.Temporary() {
 				continue
 			}
@@ -48,21 +48,27 @@ func (s *Relay) RunUDPServer() error {
 			c := NewUDPDistribute(s.UDPConn, addr)
 			table[addr.String()] = c
 			c.Cache <- buf
-			s.UDPHandle(c)
+			handle(c)
 		}()
 	}
+	return nil
+}
+func (s *Relay) RunUDPServer() error {
+	s.ListenUDP()
+	defer s.UDPConn.Close()
+	s.AcceptAndHandleUDP(s.UDPHandle)
 	return nil
 }
 
 func (s *Relay) UDPHandle(c net.Conn) error {
 	defer c.Close()
-	rc, err := net.DialTimeout("udp", s.Remote, time.Duration(s.UDPTimeout)*time.Second)
+	rc, err := net.DialTimeout("udp", s.Raddr, time.Duration(s.UDPTimeout)*time.Second)
 	if err != nil {
-		fmt.Println("Dial UDP", s.Local, "<=>", s.Remote, err)
+		fmt.Println("Dial UDP", s.Laddr, "<=>", s.Raddr, err)
 		return err
 	}
 	defer rc.Close()
-	go Copy(c, rc, s.Traffic)
-	Copy(rc, c, s.Traffic)
+	go Copy(c, rc, s)
+	Copy(rc, c, s)
 	return nil
 }

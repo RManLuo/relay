@@ -9,6 +9,7 @@ import (
 	"log"
 	"neko-relay/config"
 	"neko-relay/relay"
+	. "neko-relay/rules"
 	"neko-relay/stat"
 	"strconv"
 

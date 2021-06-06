@@ -7,4 +7,6 @@ type CONF struct {
 	Certfile string
 	Keyfile  string
 	Syncfile string
+	Fakehost string
+	Fakeurl  string
 }

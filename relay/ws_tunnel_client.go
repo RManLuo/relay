@@ -3,125 +3,72 @@ package relay
 import (
 	"fmt"
 	"net"
-	"time"
 
 	"golang.org/x/net/websocket"
 )
 
 func (s *Relay) RunWsTunnelTcpClient() error {
-	var err error
-	wait := 2.0
-	for s.TCPListen == nil {
-		s.TCPListen, err = net.ListenTCP("tcp", s.TCPAddr)
-		if err != nil {
-			fmt.Println("Listen TCP", s.Local, err, "(retry in", wait, "s)")
-			time.Sleep(time.Duration(wait) * time.Second)
-			wait *= 1.1
-		}
-	}
+	s.ListenTCP()
 	defer s.TCPListen.Close()
-	wait = 1.0
-	for s.TCPListen != nil {
-		c, err := s.TCPListen.AcceptTCP()
-		if err == nil {
-			go s.WsTunnelClientTcpHandle(c)
-			wait = 1.0
-		} else {
-			fmt.Println("Accept", s.Local, err)
-			if err, ok := err.(net.Error); ok && err.Temporary() {
-				continue
-			}
-			time.Sleep(time.Duration(wait) * time.Second)
-			wait *= 1.1
-		}
-	}
+	s.AcceptAndHandleTCP(s.WsTunnelClientTcpHandle)
 	return nil
 }
 
 func (s *Relay) WsTunnelClientTcpHandle(c *net.TCPConn) error {
 	defer c.Close()
-	ws_config, err := websocket.NewConfig("ws://"+s.Remote+"/wstcp/", "http://"+s.Remote+"/wstcp/")
+	ws_config, err := websocket.NewConfig("ws://"+s.Raddr+"/wstcp/", "http://"+s.Raddr+"/wstcp/")
 	if err != nil {
-		fmt.Println("WS Config", s.Remote, err)
+		fmt.Println("WS Config", s.Raddr, err)
 		return err
 	}
 	ws_config.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36")
 	ws_config.Header.Set("X-Forward-For", s.RIP)
-	ws_config.Header.Set("X-Forward-Host", "www.upyun.com")
+	ws_config.Header.Set("X-Forward-Host", Config.Fakehost)
 	ws_config.Header.Set("X-Forward-Protocol", c.RemoteAddr().Network())
 	ws_config.Header.Set("X-Forward-Address", c.RemoteAddr().String())
 
 	rc, err := websocket.DialConfig(ws_config)
 	if err != nil {
-		fmt.Println("Dial WS", s.Remote, err)
+		fmt.Println("Dial WS", s.Raddr, err)
 		return err
 	}
 	defer rc.Close()
 	rc.PayloadType = websocket.BinaryFrame
 
-	go Copy(rc, c, s.Traffic)
-	Copy(c, rc, s.Traffic)
+	go Copy(rc, c, s)
+	Copy(c, rc, s)
 	return nil
 }
 
 func (s *Relay) RunWsTunnelUdpClient() error {
-	var err error
-	s.UDPConn, err = net.ListenUDP("udp", s.UDPAddr)
-	if err != nil {
-		return err
-	}
+	s.ListenUDP()
 	defer s.UDPConn.Close()
-	table := make(map[string]*UDPDistribute)
-	buf := make([]byte, 1024*16)
-	for s.UDPConn != nil {
-		n, addr, err := s.UDPConn.ReadFrom(buf)
-		if err != nil {
-			if err, ok := err.(net.Error); ok && err.Temporary() {
-				continue
-			}
-			break
-		}
-		go func() {
-			buf = buf[:n]
-			if d, ok := table[addr.String()]; ok {
-				if d.Connected {
-					d.Cache <- buf
-					return
-				} else {
-					delete(table, addr.String())
-				}
-			}
-			c := NewUDPDistribute(s.UDPConn, addr)
-			table[addr.String()] = c
-			c.Cache <- buf
-			s.WsTunnelClientUdpHandle(c)
-		}()
-	}
+	s.AcceptAndHandleUDP(s.WsTunnelClientUdpHandle)
 	return nil
 }
 
 func (s *Relay) WsTunnelClientUdpHandle(c net.Conn) error {
 	defer c.Close()
-	ws_config, err := websocket.NewConfig("ws://"+s.Remote+"/wsudp/", "http://"+s.Remote+"/wsudp/")
+	ws_config, err := websocket.NewConfig("ws://"+s.Raddr+"/wsudp/", "http://"+s.Raddr+"/wsudp/")
 	if err != nil {
-		fmt.Println("WS Config", s.Remote, err)
+		fmt.Println("WS Config", s.Raddr, err)
 		return err
 	}
 	ws_config.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4240.198 Safari/537.36")
 	ws_config.Header.Set("X-Forward-For", s.RIP)
-	ws_config.Header.Set("X-Forward-Host", "www.upyun.com")
+	ws_config.Header.Set("X-Forward-Host", Config.Fakehost)
 	ws_config.Header.Set("X-Forward-Protocol", c.RemoteAddr().Network())
 	ws_config.Header.Set("X-Forward-Address", c.RemoteAddr().String())
 
 	rc, err := websocket.DialConfig(ws_config)
 	if err != nil {
-		fmt.Println("Dial WS", s.Remote, err)
+		fmt.Println("Dial WS", s.Raddr, err)
 		return err
 	}
 	defer rc.Close()
 	rc.PayloadType = websocket.BinaryFrame
 
-	go Copy(c, rc, s.Traffic)
-	Copy(rc, c, s.Traffic)
+	go Copy(c, rc, s)
+	Copy(rc, c, s)
 	return nil
 }

@@ -3,20 +3,12 @@ package main
 import (
 	"fmt"
 	"neko-relay/relay"
+	. "neko-relay/rules"
 	"net"
-	"strconv"
 	"time"
 
 	cmap "github.com/orcaman/concurrent-map"
 )
-
-type Rule struct {
-	Port   uint   `json:port`
-	Remote string `json:remote`
-	RIP    string
-	Rport  uint   `json:rport`
-	Type   string `json:type`
-}
 
 var (
 	Rules   = cmap.New()
@@ -37,21 +29,20 @@ func getTF(rid string) (tf *relay.TF) {
 }
 
 func start(rid string, r Rule) (err error) {
-	local := ":" + strconv.Itoa(int(r.Port))
-	remote := r.RIP + ":" + strconv.Itoa(int(r.Rport))
-	svr, err := relay.NewRelay(local, remote, r.RIP, 30, 10, getTF(rid), r.Type)
+	svr, err := relay.NewRelay(r, 30, 10, getTF(rid), r.Type)
 	if err != nil {
 		return
 	}
 	Svrs.Set(rid, svr)
 	svr.Serve()
+	time.Sleep(5 * time.Millisecond)
 	return
 }
 func stop(rid string) {
 	Svr, has := Svrs.Get(rid)
 	if has {
 		Svr.(*relay.Relay).Close()
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		Svrs.Remove(rid)
 	}
 }

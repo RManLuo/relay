@@ -9,11 +9,7 @@ import (
 )
 
 func (s *Relay) RunWssTunnelServer(tcp, udp bool) error {
-	var err error
-	s.TCPListen, err = net.ListenTCP("tcp", s.TCPAddr)
-	if err != nil {
-		return err
-	}
+	s.ListenTCP()
 	defer s.TCPListen.Close()
 	handler := http.NewServeMux()
 	if tcp {
@@ -22,7 +18,7 @@ func (s *Relay) RunWssTunnelServer(tcp, udp bool) error {
 	if udp {
 		handler.Handle("/wsudp/", websocket.Handler(s.WssTunnelServerUdpHandle))
 	}
-	handler.Handle("/", NewRP("https://www.upyun.com", "www.upyun.com"))
+	handler.Handle("/", NewRP(Config.Fakeurl, Config.Fakehost))
 	svr := &http.Server{Handler: handler}
 	svr.ServeTLS(s.TCPListen, Config.Certfile, Config.Keyfile)
 	defer svr.Shutdown(nil)
@@ -32,14 +28,14 @@ func (s *Relay) WssTunnelServerTcpHandle(ws *websocket.Conn) {
 	ws.PayloadType = websocket.BinaryFrame
 	defer ws.Close()
 
-	tmp, err := net.DialTimeout("tcp", s.Remote, time.Duration(s.TCPTimeout)*time.Second)
+	tmp, err := net.DialTimeout("tcp", s.Raddr, time.Duration(s.TCPTimeout)*time.Second)
 	if err != nil {
 		return
 	}
 	rc := tmp.(*net.TCPConn)
 	defer rc.Close()
-	go Copy(rc, ws, s.Traffic)
-	Copy(ws, rc, s.Traffic)
+	go Copy(rc, ws, s)
+	Copy(ws, rc, s)
 	return
 }
 
@@ -47,13 +43,13 @@ func (s *Relay) WssTunnelServerUdpHandle(ws *websocket.Conn) {
 	ws.PayloadType = websocket.BinaryFrame
 	defer ws.Close()
 
-	rc, err := net.DialTimeout("udp", s.Remote, time.Duration(s.UDPTimeout)*time.Second)
+	rc, err := net.DialTimeout("udp", s.Raddr, time.Duration(s.UDPTimeout)*time.Second)
 	if err != nil {
 		return
 	}
 	defer rc.Close()
 
-	go Copy(rc, ws, s.Traffic)
-	Copy(ws, rc, s.Traffic)
+	go Copy(rc, ws, s)
+	Copy(ws, rc, s)
 	return
 }

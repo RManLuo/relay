@@ -5,7 +5,10 @@ import (
 	"log"
 	"neko-relay/config"
 	"neko-relay/limits"
+	. "neko-relay/rules"
 	"net"
+	"strconv"
+	"sync"
 )
 
 var (
@@ -19,19 +22,24 @@ type Relay struct {
 	UDPConn    *net.UDPConn
 	TCPTimeout int
 	UDPTimeout int
-	Local      string
-	Remote     string
+	Laddr      string
+	Raddr      string
+	REMOTE     string
 	RIP        string
+	RPORT      int
 	Traffic    *TF
 	Protocol   string
+	Status     int
 }
 
-func NewRelay(local, remote, rip string, tcpTimeout, udpTimeout int, traffic *TF, protocol string) (*Relay, error) {
-	taddr, err := net.ResolveTCPAddr("tcp", local)
+func NewRelay(r Rule, tcpTimeout, udpTimeout int, traffic *TF, protocol string) (*Relay, error) {
+	laddr := ":" + strconv.Itoa(int(r.Port))
+	raddr := r.RIP + ":" + strconv.Itoa(int(r.Rport))
+	taddr, err := net.ResolveTCPAddr("tcp", laddr)
 	if err != nil {
 		return nil, err
 	}
-	uaddr, err := net.ResolveUDPAddr("udp", local)
+	uaddr, err := net.ResolveUDPAddr("udp", laddr)
 	if err != nil {
 		return nil, err
 	}
@@ -43,9 +51,10 @@ func NewRelay(local, remote, rip string, tcpTimeout, udpTimeout int, traffic *TF
 		UDPAddr:    uaddr,
 		TCPTimeout: tcpTimeout,
 		UDPTimeout: udpTimeout,
-		Local:      local,
-		Remote:     remote,
-		RIP:        rip,
+		Laddr:      laddr,
+		Raddr:      raddr,
+		RIP:        r.RIP,
+		REMOTE:     r.Remote,
 		Traffic:    traffic,
 		Protocol:   protocol,
 	}
@@ -54,14 +63,18 @@ func NewRelay(local, remote, rip string, tcpTimeout, udpTimeout int, traffic *TF
 
 // Run server.
 func (s *Relay) Serve() error {
+	s.Status = 1
 	if s.Protocol == "tcp" || s.Protocol == "tcp+udp" {
 		go s.RunTCPServer()
 	}
 	if s.Protocol == "udp" || s.Protocol == "tcp+udp" {
 		go s.RunUDPServer()
 	}
-	if s.Protocol == "websocket" {
-		go s.RunWsServer()
+	if s.Protocol == "http" {
+		go s.RunHttpServer(false)
+	}
+	if s.Protocol == "https" {
+		go s.RunHttpServer(true)
 	}
 	if s.Protocol == "tls" {
 		go s.RunTCPServer()
@@ -86,6 +99,7 @@ func (s *Relay) Serve() error {
 
 // Shutdown server.
 func (s *Relay) Close() error {
+	s.Status = 0
 	if s.TCPListen != nil {
 		s.TCPListen.Close()
 		s.TCPListen = nil
@@ -97,7 +111,15 @@ func (s *Relay) Close() error {
 	return nil
 }
 
-func Copy(dst io.Writer, src io.Reader, tf *TF) error {
+var (
+	Pool = sync.Pool{
+		New: func() interface{} {
+			return make([]byte, 16*1024)
+		},
+	}
+)
+
+func Copy(dst io.Writer, src io.Reader, s *Relay) error {
 	// n, err := io.Copy(dst, src)
 	// if err != nil {
 	// 	return nil
@@ -106,13 +128,14 @@ func Copy(dst io.Writer, src io.Reader, tf *TF) error {
 	// 	tf.Add(uint64(n))
 	// }
 	// return nil
-	var buf [1024 * 16]byte
-	for tf != nil {
+	buf := Pool.Get().([]byte)
+	defer Pool.Put(buf)
+	for s.Status == 1 && dst != nil && src != nil && s.Traffic != nil {
 		n, err := src.Read(buf[:])
 		if err != nil {
 			break
 		}
-		tf.Add(uint64(n))
+		s.Traffic.Add(uint64(n))
 		if _, err := dst.Write(buf[0:n]); err != nil {
 			break
 		}
