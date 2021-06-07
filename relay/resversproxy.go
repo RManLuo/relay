@@ -8,6 +8,7 @@ package relay
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"log"
@@ -156,7 +157,18 @@ func NewSingleHostReverseProxy(target *url.URL, s *Relay) *ReverseProxy {
 			req.Header.Set("User-Agent", "")
 		}
 	}
-	return &ReverseProxy{Director: director, s: s}
+	return &ReverseProxy{
+		s:        s,
+		Director: director,
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			Dial: (&net.Dialer{
+				Timeout: 30 * time.Second,
+			}).Dial,
+			TLSHandshakeTimeout: 10 * time.Second,
+			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+		},
+	}
 }
 
 func copyHeader(dst, src http.Header) {

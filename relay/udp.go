@@ -8,7 +8,7 @@ import (
 
 func (s *Relay) ListenUDP() (err error) {
 	wait := 1.0
-	for s.Status == 1 && s.UDPConn == nil {
+	for s.Status && s.UDPConn == nil {
 		s.UDPConn, err = net.ListenUDP("udp", s.UDPAddr)
 		if err != nil {
 			fmt.Println("Listen UDP", s.Laddr, err, "(retry in", wait, "s)")
@@ -22,7 +22,7 @@ func (s *Relay) AcceptAndHandleUDP(handle func(c net.Conn) error) error {
 	wait := 1.0
 	table := make(map[string]*UDPDistribute)
 	buf := make([]byte, 1024*16)
-	for s.Status == 1 && s.UDPConn != nil {
+	for s.Status && s.UDPConn != nil {
 		n, addr, err := s.UDPConn.ReadFrom(buf)
 		if err != nil {
 			fmt.Println("Accept", s.Laddr, err)

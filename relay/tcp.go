@@ -8,7 +8,7 @@ import (
 
 func (s *Relay) ListenTCP() (err error) {
 	wait := 2.0
-	for s.Status == 1 && s.TCPListen == nil {
+	for s.Status && s.TCPListen == nil {
 		s.TCPListen, err = net.ListenTCP("tcp", s.TCPAddr)
 		if err != nil {
 			fmt.Println("Listen TCP", s.Laddr, err, "(retry in", wait, "s)")
@@ -21,7 +21,7 @@ func (s *Relay) ListenTCP() (err error) {
 
 func (s *Relay) AcceptAndHandleTCP(handle func(c *net.TCPConn) error) error {
 	wait := 1.0
-	for s.Status == 1 && s.TCPListen != nil {
+	for s.Status && s.TCPListen != nil {
 		c, err := s.TCPListen.AcceptTCP()
 		if err == nil {
 			go handle(c)

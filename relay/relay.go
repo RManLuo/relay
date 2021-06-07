@@ -9,6 +9,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"time"
 )
 
 var (
@@ -29,7 +30,7 @@ type Relay struct {
 	RPORT      int
 	Traffic    *TF
 	Protocol   string
-	Status     int
+	Status     bool
 }
 
 func NewRelay(r Rule, tcpTimeout, udpTimeout int, traffic *TF, protocol string) (*Relay, error) {
@@ -57,13 +58,13 @@ func NewRelay(r Rule, tcpTimeout, udpTimeout int, traffic *TF, protocol string) 
 		REMOTE:     r.Remote,
 		Traffic:    traffic,
 		Protocol:   protocol,
+		Status:     true,
 	}
 	return s, nil
 }
 
 // Run server.
 func (s *Relay) Serve() error {
-	s.Status = 1
 	if s.Protocol == "tcp" || s.Protocol == "tcp+udp" {
 		go s.RunTCPServer()
 	}
@@ -99,7 +100,8 @@ func (s *Relay) Serve() error {
 
 // Shutdown server.
 func (s *Relay) Close() error {
-	s.Status = 0
+	s.Status = false
+	time.Sleep(10 * time.Millisecond)
 	if s.TCPListen != nil {
 		s.TCPListen.Close()
 		s.TCPListen = nil
@@ -130,7 +132,7 @@ func Copy(dst io.Writer, src io.Reader, s *Relay) error {
 	// return nil
 	buf := Pool.Get().([]byte)
 	defer Pool.Put(buf)
-	for s.Status == 1 && dst != nil && src != nil && s.Traffic != nil {
+	for s.Status && dst != nil && src != nil && s.Traffic != nil {
 		n, err := src.Read(buf[:])
 		if err != nil {
 			break
