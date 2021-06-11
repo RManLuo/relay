@@ -7,6 +7,7 @@ import (
 	"neko-relay/limits"
 	. "neko-relay/rules"
 	"net"
+	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -21,6 +22,7 @@ type Relay struct {
 	UDPAddr    *net.UDPAddr
 	TCPListen  *net.TCPListener
 	UDPConn    *net.UDPConn
+	Svr        *http.Server
 	TCPTimeout int
 	UDPTimeout int
 	Laddr      string
@@ -101,6 +103,9 @@ func (s *Relay) Serve() error {
 // Shutdown server.
 func (s *Relay) Close() error {
 	s.Status = false
+	if s.Svr != nil {
+		s.Svr.Shutdown(nil)
+	}
 	time.Sleep(10 * time.Millisecond)
 	if s.TCPListen != nil {
 		s.TCPListen.Close()

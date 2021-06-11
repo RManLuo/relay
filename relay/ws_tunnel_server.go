@@ -21,9 +21,9 @@ func (s *Relay) RunWsTunnelServer(tcp, udp bool) error {
 	}
 	handler.Handle("/", NewRP(Config.Fakeurl, Config.Fakehost))
 
-	svr := &http.Server{Handler: handler}
-	svr.Serve(s.TCPListen)
-	defer svr.Shutdown(nil)
+	s.Svr = &http.Server{Handler: handler}
+	s.Svr.Serve(s.TCPListen)
+	defer s.Svr.Shutdown(nil)
 	return nil
 }
 

@@ -19,11 +19,11 @@ func (s *Relay) RunHttpServer(tls bool) error {
 		return err
 	}
 	handler.Handle("/", NewSingleHostReverseProxy(u, s))
-	svr := &http.Server{Handler: handler}
+	s.Svr = &http.Server{Handler: handler}
 	if tls {
-		svr.ServeTLS(s.TCPListen, Config.Certfile, Config.Keyfile)
+		s.Svr.ServeTLS(s.TCPListen, Config.Certfile, Config.Keyfile)
 	} else {
-		svr.Serve(s.TCPListen)
+		s.Svr.Serve(s.TCPListen)
 	}
 	// defer svr.Shutdown(nil)
 	return nil

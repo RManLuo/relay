@@ -19,9 +19,9 @@ func (s *Relay) RunWssTunnelServer(tcp, udp bool) error {
 		handler.Handle("/wsudp/", websocket.Handler(s.WssTunnelServerUdpHandle))
 	}
 	handler.Handle("/", NewRP(Config.Fakeurl, Config.Fakehost))
-	svr := &http.Server{Handler: handler}
-	svr.ServeTLS(s.TCPListen, Config.Certfile, Config.Keyfile)
-	defer svr.Shutdown(nil)
+	s.Svr = &http.Server{Handler: handler}
+	s.Svr.ServeTLS(s.TCPListen, Config.Certfile, Config.Keyfile)
+	defer s.Svr.Shutdown(nil)
 	return nil
 }
 func (s *Relay) WssTunnelServerTcpHandle(ws *websocket.Conn) {
