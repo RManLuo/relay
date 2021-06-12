@@ -1,10 +1,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"neko-relay/relay"
 	. "neko-relay/rules"
 	"net"
+	"strconv"
 	"time"
 
 	cmap "github.com/orcaman/concurrent-map"
@@ -15,6 +17,7 @@ var (
 	Traffic = cmap.New()
 	Svrs    = cmap.New()
 	syncing = false
+	used    = [65536]bool{}
 )
 
 func getTF(rid string) (tf *relay.TF) {
@@ -30,6 +33,12 @@ func getTF(rid string) (tf *relay.TF) {
 }
 
 func start(rid string, r Rule) (err error) {
+	if used[r.Port] {
+		s := strconv.Itoa(int(r.Port)) + "has been used"
+		err = errors.New(s)
+		return
+	}
+	used[r.Port] = true
 	svr, err := relay.NewRelay(r, 30, 10, getTF(rid), r.Type)
 	if err != nil {
 		return
@@ -39,13 +48,14 @@ func start(rid string, r Rule) (err error) {
 	// time.Sleep(5 * time.Millisecond)
 	return
 }
-func stop(rid string) {
+func stop(rid string, r Rule) {
 	Svr, has := Svrs.Get(rid)
 	if has {
 		Svr.(*relay.Relay).Close()
 		// time.Sleep(10 * time.Millisecond)
 		Svrs.Remove(rid)
 	}
+	used[r.Rport] = false
 }
 func cmp(x, y Rule) bool {
 	return x.Port == y.Port && x.Remote == y.Remote && x.Rport == y.Rport && x.Type == y.Type
@@ -65,7 +75,7 @@ func sync(newRules map[string]Rule) {
 		if has && cmp(rule, item.Val.(Rule)) {
 			delete(newRules, rid)
 		} else {
-			stop(rid)
+			stop(rid, rule)
 			Rules.Remove(rid)
 			Traffic.Remove(rid)
 		}
@@ -108,7 +118,7 @@ func ddns() {
 			RIP, err := getIP(r.Remote)
 			if err == nil && RIP != r.RIP {
 				r.RIP = RIP
-				stop(rid)
+				stop(rid, r)
 				start(rid, r)
 			}
 		}

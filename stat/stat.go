@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/net"
 )
@@ -56,6 +57,10 @@ func GetStat() (map[string]interface{}, error) {
 		in_total += x.BytesRecv
 		out_total += x.BytesSent
 	}
+	host, err := host.Info()
+	if err != nil {
+		return nil, err
+	}
 	return gin.H{
 		"cpu": gin.H{"multi": multi, "single": single},
 		"net": gin.H{
@@ -72,5 +77,6 @@ func GetStat() (map[string]interface{}, error) {
 			"virtual": MEM,
 			"swap":    SWAP,
 		},
+		"host": host,
 	}, nil
 }

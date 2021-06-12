@@ -75,7 +75,7 @@ func main() {
 	}
 	Config.Debug = Debug
 	if show_version != false {
-		fmt.Println("neko-relay v1.4.2")
+		fmt.Println("neko-relay v1.4.3")
 		fmt.Println("TCP & UDP & WS TUNNEL & WSS TUNNEL & HTTP & HTTPS & STAT")
 		return
 	}
@@ -89,16 +89,7 @@ func main() {
 	if Config.Key != "" {
 		datapath = "/data/" + Config.Key
 	}
-	r.GET(datapath, func(c *gin.Context) {
-		if syncing {
-			c.JSON(500, "syncing")
-		} else {
-			c.JSON(200, gin.H{
-				"Rules":   Rules,
-				"Traffic": Traffic,
-			})
-		}
-	})
+	r.GET(datapath, getData)
 	if Config.Debug != true && Config.Key != "" {
 		r.Use(checkKey)
 	}
@@ -128,7 +119,7 @@ func main() {
 	r.POST("/edit", func(c *gin.Context) {
 		rid, r, ok, err := ParseRule(c)
 		if ok {
-			stop(rid)
+			stop(rid, r)
 			Rules.Set(rid, r)
 			start(rid, r)
 			resp(c, true, nil, 200)
@@ -149,8 +140,9 @@ func main() {
 			}, 200)
 			return
 		}
+		r := rule.(Rule)
 		traffic, _ := Traffic.Get(rid)
-		stop(rid)
+		stop(rid, r)
 		Rules.Remove(rid)
 		Traffic.Remove(rid)
 		resp(c, true, gin.H{
@@ -204,4 +196,27 @@ func checkKey(c *gin.Context) {
 		return
 	}
 	c.Next()
+}
+func getData(c *gin.Context) {
+	if syncing {
+		c.JSON(500, "syncing")
+	} else {
+		working := Rules.Items()
+		errs := make(map[string]Rule)
+		for t := range Svrs.Iter() {
+			svr := t.Val.(*relay.Relay)
+			failed := false
+			if svr.TCPListen == nil && working[t.Key].(Rule).Type != "udp" {
+				failed = true
+			}
+			if failed {
+				errs[t.Key] = working[t.Key].(Rule)
+				delete(working, t.Key)
+			}
+		}
+		c.JSON(200, gin.H{
+			"errors":  errs,
+			"working": working,
+		})
+	}
 }
