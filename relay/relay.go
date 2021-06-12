@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
-	"time"
 )
 
 var (
@@ -106,7 +105,7 @@ func (s *Relay) Close() error {
 	if s.Svr != nil {
 		s.Svr.Shutdown(nil)
 	}
-	time.Sleep(10 * time.Millisecond)
+	// time.Sleep(10 * time.Millisecond)
 	if s.TCPListen != nil {
 		s.TCPListen.Close()
 		s.TCPListen = nil

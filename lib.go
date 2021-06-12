@@ -14,14 +14,15 @@ var (
 	Rules   = cmap.New()
 	Traffic = cmap.New()
 	Svrs    = cmap.New()
+	syncing = false
 )
 
 func getTF(rid string) (tf *relay.TF) {
-	Tf, hast := Traffic.Get(rid)
-	if hast {
+	Tf, has := Traffic.Get(rid)
+	if has {
 		tf = Tf.(*relay.TF)
 	}
-	if !hast {
+	if !has {
 		tf = relay.NewTF()
 		Traffic.Set(rid, tf)
 	}
@@ -35,21 +36,26 @@ func start(rid string, r Rule) (err error) {
 	}
 	Svrs.Set(rid, svr)
 	svr.Serve()
-	time.Sleep(5 * time.Millisecond)
+	// time.Sleep(5 * time.Millisecond)
 	return
 }
 func stop(rid string) {
 	Svr, has := Svrs.Get(rid)
 	if has {
 		Svr.(*relay.Relay).Close()
-		time.Sleep(100 * time.Millisecond)
+		// time.Sleep(10 * time.Millisecond)
 		Svrs.Remove(rid)
 	}
 }
 func cmp(x, y Rule) bool {
 	return x.Port == y.Port && x.Remote == y.Remote && x.Rport == y.Rport && x.Type == y.Type
 }
+
 func sync(newRules map[string]Rule) {
+	if syncing {
+		return
+	}
+	syncing = true
 	if Config.Debug {
 		fmt.Println(newRules)
 	}
@@ -78,30 +84,32 @@ func sync(newRules map[string]Rule) {
 			continue
 		}
 		Rules.Set(rid, r)
-		go start(rid, r)
-		time.Sleep(5 * time.Millisecond)
+		start(rid, r)
 	}
+	syncing = false
 }
 
-func getIP(host string) (ip string, err error) {
+func getIP(host string) (string, error) {
 	ips, err := net.LookupHost(host)
 	if err != nil {
-		return
+		return "", err
 	}
-	ip = ips[0]
-	return
+	return ips[0], nil
 }
 
 func ddns() {
 	for {
 		time.Sleep(time.Second * 60)
+		for syncing {
+			time.Sleep(100 * time.Millisecond)
+		}
 		for item := range Rules.Iter() {
 			rid, r := item.Key, item.Val.(Rule)
 			RIP, err := getIP(r.Remote)
 			if err == nil && RIP != r.RIP {
 				r.RIP = RIP
 				stop(rid)
-				go start(rid, r)
+				start(rid, r)
 			}
 		}
 	}

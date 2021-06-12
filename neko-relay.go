@@ -31,7 +31,7 @@ func check(r Rule) (bool, error) {
 	}
 	return true, nil
 }
-func ParseRule(c *gin.Context) (rid string, r Rule, err error) {
+func ParseRule(c *gin.Context) (rid string, r Rule, ok bool, err error) {
 	rid = c.PostForm("rid")
 	port, _ := strconv.Atoi(c.PostForm("port"))
 	Port := uint(port)
@@ -39,16 +39,14 @@ func ParseRule(c *gin.Context) (rid string, r Rule, err error) {
 	rport, _ := strconv.Atoi(c.PostForm("rport"))
 	Rport := uint(rport)
 	typ := c.PostForm("type")
-	RIP, err := getIP(remote)
+	var RIP string
+	RIP, err = getIP(remote)
 	if err != nil {
+		ok = false
 		return
 	}
 	r = Rule{Port: Port, Remote: remote, RIP: RIP, Rport: Rport, Type: typ}
-	passed, err := check(r)
-	if !passed {
-		return
-	}
-	Rules.Set(rid, r)
+	ok, err = check(r)
 	return
 }
 func main() {
@@ -56,7 +54,7 @@ func main() {
 	var show_version bool
 	Debug := false
 	flag.StringVar(&confpath, "c", "", "config")
-	flag.StringVar(&Config.Key, "key", "key", "api key")
+	flag.StringVar(&Config.Key, "key", "", "api key")
 	flag.IntVar(&Config.Port, "port", 8080, "api port")
 	flag.StringVar(&Config.Certfile, "certfile", "public.pem", "cert file")
 	flag.StringVar(&Config.Keyfile, "keyfile", "private.key", "key file")
@@ -87,11 +85,22 @@ func main() {
 	relay.Config = Config
 	relay.GetCert()
 	r := gin.New()
-	r.GET("/data/"+Config.Key, func(c *gin.Context) {
-		c.JSON(200, gin.H{"Rules": Rules, "Svrs": Svrs, "Traffic": Traffic})
+	datapath := "/data"
+	if Config.Key != "" {
+		datapath = "/data/" + Config.Key
+	}
+	r.GET(datapath, func(c *gin.Context) {
+		if syncing {
+			c.JSON(500, "syncing")
+		} else {
+			c.JSON(200, gin.H{
+				"Rules":   Rules,
+				"Traffic": Traffic,
+			})
+		}
 	})
-	if Config.Debug != true {
-		r.Use(webMiddleware)
+	if Config.Debug != true && Config.Key != "" {
+		r.Use(checkKey)
 	}
 	r.POST("/traffic", func(c *gin.Context) {
 		reset, _ := strconv.ParseBool(c.DefaultPostForm("reset", "false"))
@@ -106,23 +115,29 @@ func main() {
 		resp(c, true, y, 200)
 	})
 	r.POST("/add", func(c *gin.Context) {
-		rid, r, err := ParseRule(c)
-		if err != nil {
+		rid, r, ok, err := ParseRule(c)
+		if ok {
+			Rules.Set(rid, r)
+			start(rid, r)
+			resp(c, true, nil, 200)
+		} else {
 			resp(c, false, err.Error(), 500)
 			return
 		}
-		go start(rid, r)
-		resp(c, true, nil, 200)
 	})
 	r.POST("/edit", func(c *gin.Context) {
-		rid, r, err := ParseRule(c)
+		rid, r, ok, err := ParseRule(c)
+		if ok {
+			stop(rid)
+			Rules.Set(rid, r)
+			start(rid, r)
+			resp(c, true, nil, 200)
+		}
 		if err != nil {
 			resp(c, false, err.Error(), 500)
 			return
 		}
-		stop(rid)
-		go start(rid, r)
-		resp(c, true, nil, 200)
+
 	})
 	r.POST("/del", func(c *gin.Context) {
 		rid := c.PostForm("rid")
@@ -156,7 +171,6 @@ func main() {
 		sync(newRules)
 		resp(c, true, Rules, 200)
 	})
-
 	r.GET("/stat", func(c *gin.Context) {
 		res, err := stat.GetStat()
 		if err == nil {
@@ -165,22 +179,25 @@ func main() {
 			resp(c, false, err, 500)
 		}
 	})
+	go Init()
+	fmt.Println("Api port:", Config.Port)
+	fmt.Println("Api key:", Config.Key)
+	r.Run(":" + strconv.Itoa(Config.Port))
+}
+func Init() {
 	if Config.Syncfile != "" {
 		data, err := ioutil.ReadFile(Config.Syncfile)
 		if err == nil {
 			newRules := make(map[string]Rule)
 			json.Unmarshal(data, &newRules)
-			go sync(newRules)
+			sync(newRules)
 		} else {
 			log.Println(err)
 		}
 	}
 	go ddns()
-	fmt.Println("Api port:", Config.Port)
-	fmt.Println("Api key:", Config.Key)
-	r.Run(":" + strconv.Itoa(Config.Port))
 }
-func webMiddleware(c *gin.Context) {
+func checkKey(c *gin.Context) {
 	if c.Request.Header.Get("key") != Config.Key {
 		resp(c, false, "Api key Incorrect", 500)
 		c.Abort()
