@@ -52,7 +52,6 @@ func (s *Relay) WsTunnelServerUdpHandle(ws *websocket.Conn) {
 		return
 	}
 	defer rc.Close()
-
 	go Copy(rc, ws, s)
 	Copy(ws, rc, s)
 	return

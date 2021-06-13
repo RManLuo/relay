@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
 )
 
 var (
@@ -105,7 +106,7 @@ func (s *Relay) Close() error {
 	if s.Svr != nil {
 		s.Svr.Shutdown(nil)
 	}
-	// time.Sleep(10 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	if s.TCPListen != nil {
 		s.TCPListen.Close()
 		s.TCPListen = nil
@@ -125,7 +126,13 @@ var (
 	}
 )
 
-func Copy(dst io.Writer, src io.Reader, s *Relay) error {
+func Copy(dst, src net.Conn, s *Relay) error {
+	defer src.Close()
+	defer dst.Close()
+	return Copy_io(dst, src, s)
+}
+
+func Copy_io(dst io.Writer, src io.Reader, s *Relay) error {
 	// n, err := io.Copy(dst, src)
 	// if err != nil {
 	// 	return nil
