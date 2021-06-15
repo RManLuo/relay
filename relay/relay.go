@@ -143,15 +143,12 @@ func Copy_io(dst io.Writer, src io.Reader, s *Relay) error {
 	// return nil
 	buf := Pool.Get().([]byte)
 	defer Pool.Put(buf)
-	for s.Status && dst != nil && src != nil && s.Traffic != nil {
-		n, err := src.Read(buf[:])
-		if err != nil {
-			break
+	if n, err := io.CopyBuffer(dst, src, buf); err == nil {
+		if s.Traffic != nil {
+			s.Traffic.Add(uint64(n))
 		}
-		s.Traffic.Add(uint64(n))
-		if _, err := dst.Write(buf[0:n]); err != nil {
-			break
-		}
+		return nil
+	} else {
+		return err
 	}
-	return nil
 }
